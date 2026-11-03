@@ -38,40 +38,41 @@ randomness. So `fit` is the identity on all three. (W1.) -/
 theorem keyGen_lengths (r : Bytes) :
     (codePrims.keyGen r).1.length = 2400 ∧ (codePrims.keyGen r).2.1.length = 64 ∧
       (codePrims.keyGen r).2.2.length = 1152 := by
-  sorry
+  exact seededKeyGen_lengths r
 
 /-- On a 64-byte header, `Encaps1` returns a 2080-byte state, a 960-byte `ct1` and a 32-byte
 shared secret. (W1.) -/
 theorem encaps1_lengths (hdr r : Bytes) (h : hdr.length = 64) :
     (codePrims.encaps1 hdr r).1.length = 2080 ∧ (codePrims.encaps1 hdr r).2.1.length = 960 ∧
       (codePrims.encaps1 hdr r).2.2.length = 32 := by
-  sorry
+  exact seededEncaps1_lengths hdr r (by omega)
 
 /-- Where the code's `encaps2` succeeds, `codePrims.encaps2` is its result, of 128 bytes. The
 header argument is ignored, as in the code. (W1.) -/
 theorem encaps2_agree (ek es ct2 : alloc.vec.Vec Std.U8) (hdr : Bytes)
     (h : incremental_mlkem768.encaps2 ek es = ok ct2) :
     codePrims.encaps2 es.val hdr ek.val = ct2.val ∧ ct2.length = 128 := by
-  sorry
+  exact ⟨codePrims_agreesSeeded.encaps2 ek es ct2 hdr h, encaps2_ok_length ek es ct2 h⟩
 
 /-- On a 2080-byte state and a 1152-byte vector, the code's `encaps2` succeeds. This is the
 success part of #788. It says nothing about the value: see `docs/bridge-step2-plan.md`, "#788".
 (W1, or a field if #788 is not done.) -/
 theorem encaps2_ok (ek es : alloc.vec.Vec Std.U8) (hek : ek.length = 1152)
     (hes : es.length = 2080) : ∃ ct2, incremental_mlkem768.encaps2 ek es = ok ct2 := by
-  sorry
+  exact exists_ok_of_spec (incremental_mlkem768.encaps2_spec ek es hek hes)
 
 /-- Where the code's `decaps` succeeds, `codePrims.decaps` is its result, of 32 bytes. (W1.) -/
 theorem decaps_agree (dk ct1 ct2 ss : alloc.vec.Vec Std.U8)
     (h : incremental_mlkem768.decaps dk ct1 ct2 = ok ss) :
     codePrims.decaps dk.val ct1.val ct2.val = ss.val ∧ ss.length = 32 := by
-  sorry
+  exact ⟨codePrims_agreesSeeded.decaps dk ct1 ct2 ss h, decaps_ok_length dk ct1 ct2 ss h⟩
 
 /-- On `u64` epochs, the total `KDF_OK` is the code's HKDF call. (W1.) -/
 theorem kdfOK_agree (k : B 32) (ep : Std.U64) :
     (kdfOKTotal k ep.val).1 = crypto.hkdf (List.replicate 32 0#u8) k.1
       (Spqr.V1.Unchunked.SendCt.sckaKeyLabel ++ (core.num.U64.to_be_bytes ep).val) 32 := by
-  sorry
+  rw [kdfOKTotal, codePrims_agreesSeeded.kdfOk k.1 ep]
+  exact fit_of_length (crypto.hkdf_length _ _ _ _)
 
 /-- On inputs that fit in a slice, the MAC has 32 bytes. So `fit 32` is the identity on the
 MACs of `codeAuth`. (W1.) -/
@@ -89,21 +90,23 @@ def Samples : States → Prop
 /-- A `send` that does not sample ignores the tape. (W1.) -/
 theorem codeSend_tape_irrel (s : States) (hs : ¬ Samples s) (t t' : List Std.U8) :
     codeSend s t = codeSend s t' := by
-  sorry
+  refine codeSend_congr s s t t' (dropRng_send_irrel s ?_ ?_ t t')
+  · rintro st rfl; exact hs trivial
+  · rintro st rfl; exact hs trivial
 
 /-- A `send` reads at most the first 64 bytes of a tape of at least 64 bytes. This is the
 adapter between the fresh 64-byte tape of `codeScheme` and the single infinite tape of #787:
 the result does not change when bytes are appended. (W1.) -/
 theorem codeSend_prefix (s : States) (t t' : List Std.U8) (ht : 64 ≤ t.length)
     (ht' : 64 ≤ t'.length) (h : t.take 64 = t'.take 64) : codeSend s t = codeSend s t' := by
-  sorry
+  exact codeSend_congr s s t t' (dropRng_send_prefix s t t' ht ht' h)
 
 /-- Sampling a tape and ignoring it couples with a pure value. Used in the branches of
 `Chunked.send` that do not sample. (W1.) -/
 theorem relTriple_sampleTape_pure {α β : Type} (f : B 64 → α) (b : β) (R : α → β → Prop)
     (h : ∀ t, R (f t) b) :
     RelTriple (do let t ← sampleTape; pure (f t)) (pure b : ProbComp β) R := by
-  sorry
+  exact relTriple_bind_pure_right sampleTape f b R h
 
 /-! ## Game invariant (W4) -/
 

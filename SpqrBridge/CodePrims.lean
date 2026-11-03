@@ -6,6 +6,7 @@ Authors: Beneficial AI Foundation
 import Spqr.Specs.Braid.StateMachine.Refinement
 import Spqr.Crypto.Fips203.Refinement.EncapsBytes
 import Spqr.Crypto.Fips203.Refinement.KeyPairBytes
+import SpqrBridge.SeededSpecs
 
 /-!
 # The fixed primitive instance of the bridge
@@ -131,6 +132,86 @@ noncomputable def codePrims : CodePrims where
 `encaps1` spec of #661, with the seed and the message read back from the bytes that
 `fill_bytes` wrote. (W1.) -/
 theorem codePrims_agreesSeeded : CodeAgreesSeeded codePrims := by
-  sorry
+  have pick_eq : ∀ {β : Type} [Nonempty β] {p : β → Prop} {b : β}, p b →
+      (∀ b', p b' → b' = b) → pick p = b := by
+    intro β _ p b hb hu
+    have h : ∃ b, p b := ⟨b, hb⟩
+    simp only [pick, h, _root_.dite_true]
+    exact hu _ (Classical.choose_spec h)
+  have ok_unique : ∀ {α : Type} {m : Result α} {a b : α}, m = ok a → m = ok b → b = a := by
+    intro α m a b ha hb
+    rw [ha, Result.ok.injEq] at hb; exact hb.symm
+  have hU64 : ∀ a b : Std.U64, a.val = b.val → a = b := fun _ _ h => UScalar.eq_of_val_eq h
+  have hUs : ∀ a b : Std.Usize, a.val = b.val → a = b := fun _ _ h => UScalar.eq_of_val_eq h
+  have hV : ∀ a b : alloc.vec.Vec Std.U8, a.val = b.val → a = b :=
+    fun a b h => (alloc.vec.Vec.eq_iff a b).mpr h
+  have hS : ∀ a b : Slice Std.U8, a.val = b.val → a = b := fun a b h => (Slice.eq_iff a b).mpr h
+  refine { toCodeAgrees := ?_, keyGenSeed := fun _ => rfl, encaps1Seed := fun _ _ => rfl }
+  constructor
+  · intro msg e h
+    refine pick_eq ⟨msg, rfl, h⟩ ?_
+    rintro e' ⟨s', hs', h'⟩
+    rw [hS s' msg hs'] at h'
+    simpa only [core.result.Result.Ok.injEq] using ok_unique h h'
+  · intro e e' c h
+    exact pick_eq h fun _ h' => ok_unique h h'
+  · intro n d h
+    refine pick_eq ⟨n, rfl, h⟩ ?_
+    rintro d' ⟨u, hu, h'⟩
+    rw [hUs u n hu] at h'
+    simpa only [core.result.Result.Ok.injEq] using ok_unique h h'
+  · intro d d' c h
+    exact pick_eq h fun _ h' => ok_unique h h'
+  · intro d m h
+    refine pick_eq ⟨m, h, rfl⟩ ?_
+    rintro o ⟨m', h', rfl⟩
+    rw [ok_unique h h']
+  · intro R i₁ i₂ rng rng' k h
+    obtain ⟨seed, hdk, hhdr, hek⟩ := generate_ok_seed i₁ i₂ rng rng' k h
+    have hs : seedOfBytes (Fips203.Refinement.toU8List seed) = seed :=
+      funext (toU8List_getD seed)
+    exact ⟨Fips203.Refinement.toU8List seed, by
+      simp only [codePrims, seededKeyGen, hs, hdk, hhdr, hek]⟩
+  · intro R i₁ i₂ rng rng' hdr ct1 es ss h
+    obtain ⟨h64, m, h1, h2, h3⟩ := encaps1_ok_msg i₁ i₂ hdr rng rng' ct1 es ss h
+    have hm : msgOfBytes (Fips203.Refinement.toU8List m) = m := funext (toU8List_getD m)
+    exact ⟨Fips203.Refinement.toU8List m, by
+      simp only [codePrims, seededEncaps1, h64, _root_.dite_true, hm, h1, h2, h3]⟩
+  · intro ek es ct2 hdr h
+    refine pick_eq ⟨ek, es, ct2, rfl, rfl, h, rfl⟩ ?_
+    rintro _ ⟨ekv, esv, ct2v, h1, h2, h', rfl⟩
+    rw [hV ekv ek h1, hV esv es h2] at h'
+    rw [ok_unique h h']
+  · intro dk ct1 ct2 ss h
+    refine pick_eq ⟨dk, ct1, ct2, ss, rfl, rfl, rfl, h, rfl⟩ ?_
+    rintro _ ⟨dkv, ct1v, ct2v, ssv, h1, h2, h3, h', rfl⟩
+    rw [hV dkv dk h1, hV ct1v ct1 h2, hV ct2v ct2 h3] at h'
+    rw [ok_unique h h']
+  · intro ek hdr b h
+    refine pick_eq ⟨ek, hdr, rfl, rfl, h⟩ ?_
+    rintro _ ⟨ekv, hdrv, h1, h2, h'⟩
+    rw [hV ekv ek h1, hV hdrv hdr h2] at h'
+    exact ok_unique h h'
+  · intro n h
+    exact pick_eq ⟨n, h, rfl⟩ fun _ ⟨n', h', e⟩ => by rw [e, ok_unique h h']
+  · intro n h
+    exact pick_eq ⟨n, h, rfl⟩ fun _ ⟨n', h', e⟩ => by rw [e, ok_unique h h']
+  · intro n h
+    exact pick_eq ⟨n, h, rfl⟩ fun _ ⟨n', h', e⟩ => by rw [e, ok_unique h h']
+  · intro n h
+    exact pick_eq ⟨n, h, rfl⟩ fun _ ⟨n', h', e⟩ => by rw [e, ok_unique h h']
+  · rfl
+  · intro key data t h
+    refine pick_eq ⟨key, data, t, rfl, rfl, h, rfl⟩ ?_
+    rintro _ ⟨ks, ds, tv, h1, h2, h', rfl⟩
+    rw [hS ks key h1, hS ds data h2] at h'
+    rw [ok_unique h h']
+  · rfl
+  · intro ep
+    exact pick_eq ⟨ep, rfl, rfl⟩ fun _ ⟨ep', h1, e⟩ => by rw [e, hU64 ep' ep h1]
+  · intro rk k ep
+    exact pick_eq ⟨ep, rfl, rfl⟩ fun _ ⟨ep', h1, e⟩ => by rw [e, hU64 ep' ep h1]
+  · intro ss ep
+    exact pick_eq ⟨ep, rfl, rfl⟩ fun _ ⟨ep', h1, e⟩ => by rw [e, hU64 ep' ep h1]
 
 end SpqrBridge

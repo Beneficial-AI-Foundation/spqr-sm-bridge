@@ -4,6 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
 import SpqrBridge.CodePrims
+import SpqrBridge.CodePrimsFacts
+import SpqrBridge.TapeFacts
 import SpqrBridge.Adapter
 import SpqrBridge.PolyDecoderLawful
 import SecureMessaging.SCKA.SPQR.Construction
@@ -45,7 +47,16 @@ def bytesOfChunks (K : ℕ) (c : Fin K → L2.Sym) : B (32 * K) :=
 
 /-- `bytesOfChunks` inverts `chunkOf`. (W1.) -/
 theorem bytesOfChunks_chunkOf (K : ℕ) (b : B (32 * K)) : bytesOfChunks K (chunkOf K b) = b := by
-  sorry
+  apply Subtype.ext
+  have hc : ∀ i : Fin K, (chunkOf K b i).val = (b.1.drop (32 * i.val)).take 32 := by
+    intro i
+    simp only [chunkOf, Aeneas.Std.Array.make_val]
+    apply fit_of_length
+    simp only [List.length_take, List.length_drop, b.2]
+    have := i.isLt
+    omega
+  simp only [bytesOfChunks, hc]
+  exact flatten_ofFn_blocks K b.1 b.2
 
 /-- A payload type with an injection into `32 K` bytes and its partial inverse. -/
 structure ByteForm (M : Type) (K : ℕ) where
@@ -95,7 +106,11 @@ abbrev PK : Type := {p : B 64 × B 1152 // codePrims.ekMatches p.1.1 p.2.1 = tru
 theorem keyGen_valid (r : Bytes) :
     codePrims.ekMatches (fit 64 (codePrims.keyGen r).2.1).1
       (fit 1152 (codePrims.keyGen r).2.2).1 = true := by
-  sorry
+  have h := seededKeyGen_lengths r
+  rw [show codePrims.keyGen r = seededKeyGen r from rfl, fit_of_length h.2.1,
+    fit_of_length h.2.2]
+  simp only [seededKeyGen]
+  exact codePrims_ekMatches_generated (seedOfBytes r)
 
 /-- Key generation on a tape. -/
 noncomputable def keyGenOf (t : B 64) : PK × B 2400 :=
