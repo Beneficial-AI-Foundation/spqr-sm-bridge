@@ -6,6 +6,7 @@ import SpqrBridge.EpochBound
 import SpqrBridge.PotentialTransfer
 import SpqrBridge.PotentialTransferSPQR
 import SpqrBridge.BudgetedPotential
+import SpqrBridge.GameInvSteps
 import SpqrBridge.CodePrims
 import SpqrBridge.CodeParams
 import SpqrBridge.CodeBound

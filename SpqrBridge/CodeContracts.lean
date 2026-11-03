@@ -109,14 +109,14 @@ theorem relTriple_sampleTape_pure {α β : Type} (f : B 64 → α) (b : β) (R :
 
 /-- The initial game state of the code satisfies `CodeGameInv`. (W4.) -/
 theorem codeGameInv_init (k : InitKey) :
-    CodeGameInv (initGameState (initAState k) (initBState k)) := by
-  sorry
+    CodeGameInv (initGameState (initAState k) (initBState k)) :=
+  codeGameInvRaw_init k
 
 /-- Every correctness query keeps `CodeGameInv`, including failed sends, key-length refusals
 and stale deliveries. (W4.) -/
 theorem codeGameInv_pres (sampleInitKey : ProbComp InitKey) :
-    QueryImpl.PreservesInv (sckaCorrectnessImpl (codeScheme sampleInitKey)) CodeGameInv := by
-  sorry
+    QueryImpl.PreservesInv (sckaCorrectnessImpl (codeScheme sampleInitKey)) CodeGameInv :=
+  codeGameInvRaw_pres sampleInitKey
 
 /-- `CodeGameInv` bounds the epochs by the send count: a party epoch by `nA + nB + 1`, and a
 recorded message's epoch by `nA + nB`. At `nA + nB ≤ 2^64 - 2`, the second bound gives every
@@ -124,8 +124,8 @@ recorded message epoch plus one below `2^64`. (W4, from `epoch_bound_strong`.) -
 theorem codeGameInv_epochs (s : GameState States States (B 32) Message) (h : CodeGameInv s) :
     s.stA.epochOf.val ≤ s.nA + s.nB + 1 ∧ s.stB.epochOf.val ≤ s.nA + s.nB + 1 ∧
       ∀ n m t, (s.msgA n = some (m, t) ∨ s.msgB n = some (m, t)) →
-        m.epoch.val ≤ s.nA + s.nB := by
-  sorry
+        m.epoch.val ≤ s.nA + s.nB :=
+  codeGameInvRaw_epochs s h
 
 /-! ## Upstream adapters (W2, W5) -/
 

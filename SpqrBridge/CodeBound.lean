@@ -8,6 +8,7 @@ import SpqrBridge.CodeParams
 import SpqrBridge.EpochBound
 import SpqrBridge.PolyEncoderChunk
 import SpqrBridge.PotentialTransferSPQR
+import SpqrBridge.GameInvSteps
 
 /-!
 # The frozen interfaces of step 2
