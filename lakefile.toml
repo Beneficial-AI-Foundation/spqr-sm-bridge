@@ -1,0 +1,17 @@
+name = "SpqrBridge"
+defaultTargets = ["SpqrBridge"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "Spqr"
+path = "../spqr"
+
+[[require]]
+name = "SecureMessaging"
+path = "../sm"
+
+[[lean_lib]]
+name = "SpqrBridge"
