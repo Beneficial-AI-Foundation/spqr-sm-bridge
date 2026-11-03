@@ -15,3 +15,4 @@ import SpqrBridge.ChunkedRel
 import SpqrBridge.ChunkedFacts
 import SpqrBridge.ChunkedRecv
 import SpqrBridge.ChunkedRecvAll
+import SpqrBridge.ChunkedSend

@@ -97,10 +97,11 @@ def RA (s : States) (st : SMState) : Prop := ∃ σ, Refines s σ ∧ ChunkedRel
 /-- A code chunk as a secure-messaging chunk. -/
 def chunkOfCode (c : encoding.Chunk) : ℕ × L2.Sym := (c.index.val, c.data)
 
-/-- The payloads correspond by constructor. `Ct1Ack false`, which the code never sends,
-corresponds to no payload. -/
+/-- The payloads correspond by constructor. `Ct1Ack false`, which the code never sends, carries
+nothing: like `absMsg`, it corresponds to the `none` payload. -/
 def PayloadRel : MessagePayload → SPQR.Chunked.Payload L2.Sym → Prop
   | .None, .none => True
+  | .Ct1Ack false, .none => True
   | .Hdr c, .hdr x => x = chunkOfCode c
   | .Ek c, .ek x => x = chunkOfCode c
   | .EkCt1Ack c, .ekCt1Ack x => x = chunkOfCode c
