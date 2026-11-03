@@ -14,3 +14,4 @@ import SpqrBridge.CodeContracts
 import SpqrBridge.ChunkedRel
 import SpqrBridge.ChunkedFacts
 import SpqrBridge.ChunkedRecv
+import SpqrBridge.ChunkedRecvAll
