@@ -3,6 +3,7 @@ Copyright (c) 2026 Beneficial AI Foundation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
+import SpqrBridge.BudgetedPotential
 import SpqrBridge.CodeParams
 import SpqrBridge.EpochBound
 import SpqrBridge.PolyEncoderChunk
@@ -108,8 +109,9 @@ theorem correctness_error_le_of_budgeted_transfer
     (RA : StA₁ → StA₂ → Prop) (RB : StB₁ → StB₂ → Prop) (RM : Rho₁ → Rho₂ → Prop) (Bud : ℕ)
     (hobl : BudgetedTransferObligations S₁ S₂ Inv₂ Inv₁ RA RB RM Bud)
     (adv : SCKACorrectnessAdversary Rho₁) (q : ℕ) (hq : SendQueryBound adv q) (hqB : q < Bud) :
-    1 - Pr{let x ← correctnessExp S₁ adv}[x = true] ≤ q * ε := by
-  sorry
+    1 - Pr{let x ← correctnessExp S₁ adv}[x = true] ≤ q * ε :=
+  correctness_error_le_of_budgeted_steps S₁ S₂ Inv₂ V₂ ε hV₂ hinit₂ hpres₂ hstep₂ Inv₁ RA RB RM
+    Bud hobl.init hobl.pres hobl.sendA hobl.sendB hobl.recvA hobl.recvB adv q hq hqB
 
 end Budgeted
 
