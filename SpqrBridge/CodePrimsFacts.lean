@@ -6,6 +6,8 @@ Authors: Beneficial AI Foundation
 import SpqrBridge.CodePrims
 import SpqrBridge.Adapter
 import Spqr.Specs.IncrementalMlkem768.EkMatchesHeader
+import Spqr.Auxiliary.Aeneas.Slice
+import Spqr.Specs.IncrementalMlkem768.Encaps2
 
 /-!
 # Facts about `codePrims`
@@ -67,5 +69,23 @@ theorem flatten_ofFn_blocks {α : Type} (K : ℕ) (l : List α) (h : l.length = 
       congr 1; funext i; rw [List.drop_drop]; congr 2; ring
     simp only [Fin.val_zero, Nat.mul_zero, List.drop_zero, Fin.val_succ]
     rw [hd, ih (l.drop 32) (by rw [List.length_drop, h]; ring_nf; omega), List.take_append_drop]
+
+/-- A successful `encaps2` returns 128 bytes: the `Ciphertext2` array. -/
+theorem encaps2_ok_length (ek es ct2 : alloc.vec.Vec Std.U8)
+    (h : incremental_mlkem768.encaps2 ek es = ok ct2) : ct2.length = 128 := by
+  simp only [incremental_mlkem768.encaps2, lift, bind_ok, Result.bind_eq_ok] at h
+  obtain ⟨_, -, _, -, _, -, _, -, _, -, _, -, _, -, _, -, c, -, hv⟩ := h
+  rw [alloc.vec.Vec.length, Slice.to_vec_U8_ok_val hv, Array.val_to_slice,
+    Aeneas.Std.Array.length_eq]
+  rfl
+
+/-- A successful `decaps` returns 32 bytes: the shared-secret array. -/
+theorem decaps_ok_length (dk ct1 ct2 ss : alloc.vec.Vec Std.U8)
+    (h : incremental_mlkem768.decaps dk ct1 ct2 = ok ss) : ss.length = 32 := by
+  simp only [incremental_mlkem768.decaps, lift, bind_ok, Result.bind_eq_ok] at h
+  obtain ⟨_, -, _, -, _, -, _, -, _, -, _, -, _, -, _, -, _, -, c, -, hv⟩ := h
+  rw [alloc.vec.Vec.length, Slice.to_vec_U8_ok_val hv, Array.val_to_slice,
+    Aeneas.Std.Array.length_eq]
+  rfl
 
 end SpqrBridge
