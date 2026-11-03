@@ -591,6 +591,28 @@ theorem add_chunk_inv {K : ℕ} (msg : Fin K → Sym) (d : PolyDecoder) (hinv : 
   rw [← h16]
   exact hall 16 le_rfl
 
+/-- From an honest state, `add_chunk` of any chunk with index `< 2^16` does not panic. -/
+theorem add_chunk_ok {K : ℕ} (msg : Fin K → Sym) (d : PolyDecoder) (hinv : Inv msg d)
+    (n : ℕ) (hn : n < 2 ^ 16) (data : Sym) :
+    ∃ d', add_chunk d (toChunk n data) = .ok d' := by
+  have hmax := usize_max_ge
+  have hcap : ∀ k, k < 16 → (d.pts[k]!).length + 17 ≤ Usize.max := by
+    intro k hk
+    have := slotSorted_length_le _ (hinv.2.1.slot! k hk)
+    simp only [Array.getElem!_Nat_eq, alloc.vec.Vec.length]
+    omega
+  obtain ⟨d', hd', -⟩ := WP.spec_imp_exists
+    (add_chunk_spec d (toChunk n data) (by rw [toChunk_index_val n hn]; omega) hcap)
+  exact ⟨d', hd'⟩
+
+/-- From an honest state, `decoded_message` does not panic. -/
+theorem decoded_message_ok {K : ℕ} (hKN : K ≤ 2 ^ 16) (msg : Fin K → Sym) (d : PolyDecoder)
+    (hinv : Inv msg d) : ∃ r, decoded_message d = .ok r := by
+  have hmax := usize_max_ge
+  obtain ⟨r, hr, -⟩ := WP.spec_imp_exists
+    (decoded_message_spec d hinv.2.1 (by rw [hinv.1]; omega))
+  exact ⟨r, hr⟩
+
 /-! ## Law L2 -/
 
 /-- From an honest state the wrapped decoder decodes nothing or the payload. -/
