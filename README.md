@@ -7,7 +7,7 @@ Dependencies, by path:
 
 - `../spqr`: SparsePostQuantumRatchet-verify, branch `la/poc-aeneas-bump` (Aeneas
   `nightly-2026.11.03-ab34bd2`, with `Global` renamed by hand in `SrcTranslated/`).
-- `../sm`: secure-messaging, branch `la/generic-decoder` (`a89b2d00`), one commit on top of
+- `../sm`: secure-messaging, branch `la/generic-decoder` (`c16e287c`), one commit on top of
   `a3e953ee` (`ada/spqr-correctness`). It makes the ML-KEM Braid and SPQR machines generic in
   their stream decoder, so the Rust decoder can be used in them directly.
 
