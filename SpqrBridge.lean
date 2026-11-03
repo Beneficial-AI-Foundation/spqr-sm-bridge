@@ -8,3 +8,4 @@ import SpqrBridge.PotentialTransferSPQR
 import SpqrBridge.CodePrims
 import SpqrBridge.CodeParams
 import SpqrBridge.CodeBound
+import SpqrBridge.CodeContracts
