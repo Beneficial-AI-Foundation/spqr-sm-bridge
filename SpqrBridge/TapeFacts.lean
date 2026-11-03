@@ -94,4 +94,58 @@ theorem dropRng_send_irrel (s : States) (h1 : ∀ st, s ≠ .KeysUnsampled st)
   | HeaderReceived st => exact absurd rfl (h2 st)
   | _ => simp only [dropRng, States.send, Std.bind_assoc, uncurry_bind, bind_ok]
 
+theorem uncurry_eq {α β γ : Type} (f : α → β → γ) : uncurry f = fun q => f q.1 q.2 := by
+  funext q
+  obtain ⟨a, b⟩ := q
+  simp only [uncurry_apply_pair]
+
+/-- Filling at most `n` bytes from a tape of at least `n` bytes reads only its first `n` bytes. -/
+theorem tapeFill_take (t : List Std.U8) (s : Slice Std.U8) (n : ℕ) (hs : s.length ≤ n)
+    (hn : n ≤ t.length) :
+    tapeFill t s = Std.bind (tapeFill (t.take n) s) fun p => ok (t.drop s.length, p.2) := by
+  have h1 : s.length ≤ t.length := le_trans hs hn
+  have h2 : s.length ≤ (t.take n).length := by rw [List.length_take]; omega
+  simp only [tapeFill, h1, h2, _root_.dite_true, bind_ok, Result.ok.injEq, Prod.mk.injEq,
+    true_and]
+  apply (Slice.eq_iff _ _).mpr
+  simp only [Slice.from_val, List.take_take, Nat.min_eq_left hs]
+
+theorem generate_tape (t : List Std.U8) (ht : 64 ≤ t.length) :
+    incremental_mlkem768.generate tapeRng tapeCrypto t =
+      Std.bind (incremental_mlkem768.generate tapeRng tapeCrypto (t.take 64))
+        fun p => ok (p.1, t.drop 64) := by
+  have hl : (Array.repeat 64#usize 0#u8).to_slice.length = 64 := by
+    simp only [Slice.length, Array.val_to_slice, Aeneas.Std.Array.length_eq]; rfl
+  simp only [incremental_mlkem768.generate, lift, Array.to_slice_mut, bind_ok,
+    uncurry_apply_pair, tapeRng, tapeCore]
+  rw [tapeFill_take t _ 64 (le_of_eq hl) ht]
+  simp only [Std.bind_assoc, bind_ok, uncurry_eq, hl]
+
+theorem encaps1_tape (hdr : alloc.vec.Vec Std.U8) (t : List Std.U8) (ht : 64 ≤ t.length) :
+    incremental_mlkem768.encaps1 tapeRng tapeCrypto hdr t =
+      Std.bind (incremental_mlkem768.encaps1 tapeRng tapeCrypto hdr (t.take 64))
+        fun p => ok (p.1, t.drop 32) := by
+  have hl : (Array.repeat 32#usize 0#u8).to_slice.length = 32 := by
+    simp only [Slice.length, Array.val_to_slice, Aeneas.Std.Array.length_eq]; rfl
+  simp only [incremental_mlkem768.encaps1, lift, Array.to_slice_mut, bind_ok,
+    uncurry_apply_pair, tapeRng, tapeCore]
+  rw [tapeFill_take t _ 64 (by rw [hl]; omega) ht]
+  simp only [Std.bind_assoc, bind_ok, uncurry_eq, hl, alloc.vec.Vec.deref_mut]
+
+/-- A `send` reads at most the first 64 bytes of a tape of at least 64 bytes. -/
+theorem dropRng_send_prefix (s : States) (t t' : List Std.U8) (ht : 64 ≤ t.length)
+    (ht' : 64 ≤ t'.length) (h : t.take 64 = t'.take 64) :
+    dropRng (States.send tapeRng tapeCrypto s t) =
+      dropRng (States.send tapeRng tapeCrypto s t') := by
+  cases s with
+  | KeysUnsampled st =>
+    simp only [dropRng, States.send, v1.chunked.send_ek.KeysUnsampled.send_hdr_chunk,
+      v1.unchunked.send_ek.KeysUnsampled.send_header, generate_tape t ht, generate_tape t' ht',
+      Std.bind_assoc, bind_ok, uncurry_eq, h]
+  | HeaderReceived st =>
+    simp only [dropRng, States.send, v1.chunked.send_ct.HeaderReceived.send_ct1_chunk,
+      v1.unchunked.send_ct.HeaderReceived.send_ct1, encaps1_tape _ t ht, encaps1_tape _ t' ht',
+      Std.bind_assoc, bind_ok, uncurry_eq, h]
+  | _ => simp only [dropRng, States.send, Std.bind_assoc, uncurry_bind, bind_ok]
+
 end SpqrBridge

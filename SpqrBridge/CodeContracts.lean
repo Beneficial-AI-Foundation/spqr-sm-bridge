@@ -99,7 +99,7 @@ adapter between the fresh 64-byte tape of `codeScheme` and the single infinite t
 the result does not change when bytes are appended. (W1.) -/
 theorem codeSend_prefix (s : States) (t t' : List Std.U8) (ht : 64 ≤ t.length)
     (ht' : 64 ≤ t'.length) (h : t.take 64 = t'.take 64) : codeSend s t = codeSend s t' := by
-  sorry
+  exact codeSend_congr s s t t' (dropRng_send_prefix s t t' ht ht' h)
 
 /-- Sampling a tape and ignoring it couples with a pure value. Used in the branches of
 `Chunked.send` that do not sample. (W1.) -/
