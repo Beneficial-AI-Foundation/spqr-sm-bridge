@@ -54,7 +54,7 @@ are `braid_send_pure` (nine states, `ChunkedSend.lean`), `keysUnsampled_agree` a
 
 ## What each proof uses
 
-| Theorem | `BridgeObligations` fields | W1 contracts (still `sorry` here) |
+| Theorem | `BridgeObligations` fields | W1 contracts |
 |---|---|---|
 | `receive_chunked` | `recv_complete`, `recv_key_length`, `mlkem_sizes` | `encaps2_ok`, `encaps2_agree` |
 | `send_chunked` | `send_total`, `send_refines_tape`, `send_key_length`, `next_chunk_wrap` | `keyGen_lengths`, `encaps1_lengths`, `relTriple_sampleTape_pure` |
@@ -62,7 +62,7 @@ are `braid_send_pure` (nine states, `ChunkedSend.lean`), `keysUnsampled_agree` a
 | `reachParty_refines` | none (`hsz` premise) | none |
 
 All the theorems also reach `keyGen_valid` and `bytesOfChunks_chunkOf` through `codeParams`.
-W1 proved every contract in this table on `poc/w1`. `mac_length` is not used: the MAC length
+W1 proved every contract in this table, and `main` has them since `70f394c`. `mac_length` is not used: the MAC length
 comes from `codePrims_mac_length` (`ChunkedFacts.lean`), which needs `u32::MAX` bounds and the
 HMAC axiom, as in W1's `mac_length_u32`.
 
@@ -72,15 +72,14 @@ both from `CodeGameInv` and `codeGameInv_epochs` at `nA + nB ≤ Bud`. `send_chu
 
 ## Axioms
 
-`#print axioms` gives the same list for `send_chunked`, `receive_chunked` and
-`recvRel_ekSentCt1Received_ct2`: `propext`, `Classical.choice`, `Quot.sound`, `sorryAx`,
-`libcrux_hmac.hmac_sha256_tag32_spec` and `spqr.kdf.hkdf_to_slice_spec`. For `ra_initA` and
-`ra_initB`, the list is the same without the HMAC axiom. A scan of the dependency closure
-shows that `sorryAx` comes only from W1 theorems. These are `keyGen_valid`,
-`bytesOfChunks_chunkOf`, `keyGen_lengths`, `encaps1_lengths`, `relTriple_sampleTape_pure`,
-`encaps2_ok`, `encaps2_agree` and `codePrims_agreesSeeded`. `reachParty_refines` and both decoder
-contracts have no `sorryAx`. `reachParty_refines` inherits `spqr`'s axioms through
-`recv_refines`. No new axiom.
+After the merge of W1 (`main` at `70f394c`), no W2 theorem depends on `sorryAx`. `#print axioms`
+gives `propext`, `Classical.choice`, `Quot.sound`, `libcrux_hmac.hmac_sha256_tag32_spec` and
+`spqr.kdf.hkdf_to_slice_spec` for `send_chunked` and `recvRel_ekSentCt1Received_ct2`.
+`receive_chunked` also has
+`potentially_fix_state_incorrectly_encoded_by_libcrux_issue_1275_spec`, through W1's
+`encaps2_ok`. This is the #788 limit of the plan. `ra_initA` and `ra_initB` have the list
+without the HMAC axiom. `reachParty_refines` inherits `spqr`'s axioms through `recv_refines`.
+No new axiom.
 
 ## Changes outside new files
 
