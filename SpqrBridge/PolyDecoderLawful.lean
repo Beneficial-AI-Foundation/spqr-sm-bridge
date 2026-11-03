@@ -1,9 +1,29 @@
+/-
+Copyright (c) 2026 Beneficial AI Foundation. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Beneficial AI Foundation
+-/
 import Spqr.Specs.Encoding.Polynomial.PolyDecoder.DecodedMessage.DecodedMessage
 import Spqr.Specs.Encoding.Polynomial.PolyDecoder.AddChunk
 import Spqr.Specs.Encoding.Polynomial.PolyDecoder.New
 import SecureMessaging.ErasureCode.Streaming
 import Mathlib.LinearAlgebra.Lagrange
 import Spqr.Auxiliary.Aeneas.SpecImpExists
+
+/-!
+# The code's polynomial decoder meets secure-messaging's stream-decoder law
+
+`PolyDecoder` (`src/encoding/polynomial.rs`, extracted by Aeneas) is wrapped as a
+`StreamDecoder` of secure-messaging, and `Lawful` (law L2) is proved for it: adding an honestly
+encoded chunk to an honest decoder keeps it honest, and the decoder then decodes nothing or the
+payload.
+
+The result is generic in the number `K` of points per polynomial slot. The payload has `32 K`
+bytes and the decoder is `PolyDecoder::new(32 K)`. The four streams of ML-KEM Braid use
+`K = 3` (header and MAC, 96 bytes), `36` (encapsulation key, 1152 bytes), `30` (ct1, 960 bytes)
+and `5` (ct2 and MAC, 160 bytes).
+-/
+
 open Aeneas Aeneas.Std Polynomial spqr.encoding.polynomial spqr.encoding.gf
 
 namespace SpqrBridge.L2
@@ -273,6 +293,9 @@ open spqr.encoding.polynomial.PolyDecoder.Insts.SpqrEncodingDecoder in
 /-- The code chunk with index `n mod 2^16` and payload `data`. -/
 def toChunk (n : ℕ) (data : Sym) : spqr.encoding.Chunk := ⟨⟨BitVec.ofNat 16 n⟩, data⟩
 
+theorem usize_max_ge : 2 ^ 32 - 1 ≤ Usize.max := by
+  rcases Usize.bounds_eq with h | h <;> rw [h] <;> simp [U32.max, U64.max, U32.numBits, U64.numBits]
+
 /-- The decoder state right after `PolyDecoder::new(32 * K)`. -/
 def emptyDecoder (K : ℕ) (hK : 16 * K ≤ Usize.max) : PolyDecoder :=
   { pts_needed := UScalar.ofNatCore (16 * K) (by have := hK; have := Nat.two_pow_pos System.Platform.numBits; simp only [Usize.max, UScalarTy.numBits, Usize.numBits] at *; omega)
@@ -293,10 +316,10 @@ open spqr.encoding.polynomial.PolyDecoder.Insts.SpqrEncodingDecoder in
 /-- The code's `PolyDecoder` as a stream decoder. A failing `add_chunk` (a panic in Rust)
 leaves the state unchanged and a failing or empty `decoded_message` gives `none`; neither
 happens from honest states. -/
-noncomputable def polyStreamDecoder {M : Type} (K : ℕ) (hK : 16 * K ≤ Usize.max)
+noncomputable def polyStreamDecoder {M : Type} (K : ℕ) (hKN : K ≤ 2 ^ 16)
     (cd : Codec M K) : ErasureCodePayload.Streaming.StreamDecoder M Sym where
   D := PolyDecoder
-  empty := emptyDecoder K hK
+  empty := emptyDecoder K (by have := usize_max_ge; omega)
   addChunk d c := match (add_chunk d (toChunk c.1 c.2)).match with
     | .ok d' => d'
     | _ => d
@@ -395,9 +418,6 @@ theorem decodedValue_eq {K : ℕ} (hKN : K ≤ 2 ^ 16) (msg : Fin K → Sym) (d 
     rw [htake_len] at heq
     rw [heq, hnode]
 
-theorem usize_max_ge : 2 ^ 32 - 1 ≤ Usize.max := by
-  rcases Usize.bounds_eq with h | h <;> rw [h] <;> simp [U32.max, U64.max, U32.numBits, U64.numBits]
-
 /-- If `decoded_message` returns bytes from an honest state, they are the payload. -/
 theorem decoded_unflatten {K : ℕ} (hKN : K ≤ 2 ^ 16) (msg : Fin K → Sym) (d : PolyDecoder)
     (hinv : Inv msg d) (v : alloc.vec.Vec U8) (hd : decoded_message d = .ok (some v)) :
@@ -449,4 +469,133 @@ theorem decoded_unflatten {K : ℕ} (hKN : K ≤ 2 ^ 16) (msg : Fin K → Sym) (
     rw [e2] at hd2
     exact UScalar.eq_of_val_eq hd2
 
+/-! ## `add_chunk` of an honest chunk keeps the state honest -/
+
+/-- A slot with strictly increasing 16-bit abscissae has at most `2^16` points. -/
+theorem slotSorted_length_le (l : List Pt) (hs : PolyDecoder.SlotSorted l) :
+    l.length ≤ 2 ^ 16 := by
+  let f : Pt → Fin (2 ^ 16) := fun p =>
+    ⟨p.x.value.val, by have := p.x.value.hBounds; simp only [UScalarTy.numBits] at this; omega⟩
+  have hnd : (l.map f).Nodup := by
+    rw [List.Nodup, List.pairwise_map]
+    refine hs.imp (fun {a b} h e => ?_)
+    have := congrArg Fin.val e
+    simp only [f] at this
+    omega
+  have := hnd.length_le_card
+  simpa using this
+
+theorem mem_of_isSortedPushResult {old new_ : List Pt} {p x : Pt}
+    (h : IsSortedPushResult old new_ p) (hx : x ∈ new_) : x ∈ old ∨ x = p := by
+  obtain ⟨j, _, h | ⟨_, h⟩⟩ := h <;> subst h <;>
+    simp only [List.mem_append, List.mem_singleton] at hx <;>
+    rcases hx with (hx | hx) | hx
+  · exact Or.inl (List.mem_of_mem_take hx)
+  · exact Or.inr hx
+  · exact Or.inl (List.mem_of_mem_drop hx)
+  · exact Or.inl (List.mem_of_mem_take hx)
+  · exact Or.inr hx
+  · exact Or.inl (List.mem_of_mem_drop hx)
+
+theorem ite_imp_or {c : Prop} [Decidable c] {A B : Prop} (h : if c then A else B) : A ∨ B := by
+  by_cases hc : c
+  · rw [ite_eq_left hc] at h; exact Or.inl h
+  · rw [ite_eq_right hc] at h; exact Or.inr h
+
+theorem toChunk_index_val (n : ℕ) (hn : n < 2 ^ 16) (data : Sym) :
+    (toChunk n data).index.val = n := by
+  simp only [toChunk, UScalar.val]
+  exact Nat.mod_eq_of_lt hn
+
+/-- Adding the chunk of `msg` at index `n < 2^16` to an honest state gives an honest state. -/
+theorem add_chunk_inv {K : ℕ} (msg : Fin K → Sym) (d : PolyDecoder) (hinv : Inv msg d)
+    (n : ℕ) (hn : n < 2 ^ 16) (d' : PolyDecoder)
+    (h : add_chunk d (toChunk n (codeChunk msg n)) = .ok d') : Inv msg d' := by
+  have hmax := usize_max_ge
+  obtain ⟨hneed, hvalid, hon⟩ := hinv
+  have hidx := toChunk_index_val n hn (codeChunk msg n)
+  have hcap : ∀ k, k < 16 → (d.pts[k]!).length + 17 ≤ Usize.max := by
+    intro k hk
+    have := slotSorted_length_le _ (hvalid.slot! k hk)
+    simp only [Array.getElem!_Nat_eq, alloc.vec.Vec.length]
+    omega
+  have hover : (toChunk n (codeChunk msg n)).index * 16 + 16 ≤ Usize.max := by
+    rw [hidx]; omega
+  have hspec := WP.post_of_ok (add_chunk_spec d _ hover hcap) h
+  have hvalid' := WP.post_of_ok (add_chunk_spec_valid d _ hover hcap hvalid) h
+  obtain ⟨hneed', _, selfs, h0, h16, hstep⟩ := hspec
+  refine ⟨by rw [hneed', hneed], hvalid', ?_⟩
+  -- every intermediate state stores only points on the slot polynomials
+  have hall : ∀ m, m ≤ 16 → ∀ s < 16, ∀ pt ∈ ((selfs m).pts.val[s]!).val,
+      pt.y.toGF216 = (codePoly msg s).eval pt.x.toGF216 := by
+    intro m
+    induction m with
+    | zero => intro _; rw [h0]; exact hon
+    | succ m ih =>
+      intro hm s hs pt hpt
+      obtain ⟨_, _, _, hpidx, p, hpx, hpy, hpush⟩ := hstep m (by omega)
+      simp only [hidx] at hpidx hpx hpush
+      have hpoly : (n * 16 + m) % 16 = m := by omega
+      simp only [hpoly] at hpush
+      -- the pushed point lies on the polynomial of slot `m`
+      have hp : p.y.toGF216 = (codePoly msg m).eval p.x.toGF216 := by
+        have hw := word_chunkOfWords (codeWord msg n) m (by omega) (gfToNat_lt _)
+        simp only [word, toChunk, codeChunk, Array.getElem!_Nat_eq] at hpy hw
+        rw [GF16.toGF216, GF16.toGF216, hpy, hpx, hpidx, show m * 2 = 2 * m by ring]
+        rw [show (chunkOfWords (codeWord msg n)).val[2 * m]!.val * 256 +
+            (chunkOfWords (codeWord msg n)).val[2 * m + 1]!.val = codeWord msg n m by omega]
+        exact toGF216_gfToNat _
+      rcases ite_imp_or hpush with ⟨hother, hres⟩ | hpush
+      · by_cases hsm : s = m
+        · subst hsm
+          rcases mem_of_isSortedPushResult hres hpt with hold | rfl
+          · exact ih (by omega) s hs pt hold
+          · exact hp
+        · have := hother s hsm
+          rw [Array.getElem!_Nat_eq] at this
+          rw [this] at hpt
+          exact ih (by omega) s hs pt hpt
+      · rw [hpush] at hpt
+        exact ih (by omega) s hs pt hpt
+  rw [← h16]
+  exact hall 16 le_rfl
+
+/-! ## Law L2 -/
+
+/-- From an honest state the wrapped decoder decodes nothing or the payload. -/
+theorem decodedPayload_honest {M : Type} (K : ℕ) (hKN : K ≤ 2 ^ 16) (cd : Codec M K)
+    (d : PolyDecoder) (p : M) (hd : Inv (cd.ser p) d) :
+    (polyStreamDecoder K hKN cd).decodedPayload d = none ∨
+      (polyStreamDecoder K hKN cd).decodedPayload d = some p := by
+  simp only [polyStreamDecoder]
+  rcases hm : (decoded_message d).match with v | _ | _
+  · rcases v with _ | v
+    · exact Or.inl rfl
+    · right
+      show cd.parse (unflatten K v.val) = some p
+      rw [decoded_unflatten hKN (cd.ser p) d hd v (Result.match.isOk.mp hm), cd.parse_ser]
+  · exact Or.inl rfl
+  · exact Or.inl rfl
+
+/-- **Law L2 for the code's decoder.** Adding a chunk that the polynomial code emits for `p` at
+any counter to a `PolyDecoder` that holds only points of `p` keeps it so, and the decoder then
+decodes nothing or `p`. -/
+theorem polyStreamDecoder_lawful {M : Type} (K : ℕ) (hK : 0 < K) (hKN : K ≤ 2 ^ 16)
+    (cd : Codec M K) :
+    (polyStreamDecoder K hKN cd).Lawful (ecp K hK hKN cd) where
+  honest_addChunk d p i hd := by
+    have hhon : (polyStreamDecoder K hKN cd).Honest
+        ((polyStreamDecoder K hKN cd).addChunk d ((ecp K hK hKN cd).encode p i)) p := by
+      simp only [polyStreamDecoder, ErasureCodePayload.encode, ErasureCodePayload.counterIndex,
+        ecp, ec]
+      rcases hm : (add_chunk d (toChunk (i % 2 ^ 16) (codeChunk (cd.ser p) (i % 2 ^ 16)))).match
+        with d' | _ | _
+      · exact add_chunk_inv (cd.ser p) d hd (i % 2 ^ 16) (Nat.mod_lt _ (by norm_num)) d'
+          (Result.match.isOk.mp hm)
+      · exact hd
+      · exact hd
+    exact ⟨hhon, decodedPayload_honest K hKN cd _ p hhon⟩
+
 end SpqrBridge.L2
+
+#print axioms SpqrBridge.L2.polyStreamDecoder_lawful
