@@ -104,7 +104,7 @@ theorem codeSend_prefix (s : States) (t t' : List Std.U8) (ht : 64 ≤ t.length)
 theorem relTriple_sampleTape_pure {α β : Type} (f : B 64 → α) (b : β) (R : α → β → Prop)
     (h : ∀ t, R (f t) b) :
     RelTriple (do let t ← sampleTape; pure (f t)) (pure b : ProbComp β) R := by
-  sorry
+  exact relTriple_bind_pure_right sampleTape f b R h
 
 /-! ## Game invariant (W4) -/
 

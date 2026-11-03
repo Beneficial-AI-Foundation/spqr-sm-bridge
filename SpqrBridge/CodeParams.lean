@@ -5,6 +5,7 @@ Authors: Beneficial AI Foundation
 -/
 import SpqrBridge.CodePrims
 import SpqrBridge.CodePrimsFacts
+import SpqrBridge.TapeFacts
 import SpqrBridge.Adapter
 import SpqrBridge.PolyDecoderLawful
 import SecureMessaging.SCKA.SPQR.Construction
