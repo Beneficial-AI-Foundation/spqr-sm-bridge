@@ -5,3 +5,6 @@ import SpqrBridge.Adapter
 import SpqrBridge.EpochBound
 import SpqrBridge.PotentialTransfer
 import SpqrBridge.PotentialTransferSPQR
+import SpqrBridge.W0.Seeded
+import SpqrBridge.W0.Params
+import SpqrBridge.W0.Interfaces
