@@ -11,3 +11,6 @@ import SpqrBridge.CodePrims
 import SpqrBridge.CodeParams
 import SpqrBridge.CodeBound
 import SpqrBridge.CodeContracts
+import SpqrBridge.ChunkedRel
+import SpqrBridge.ChunkedFacts
+import SpqrBridge.ChunkedRecv
