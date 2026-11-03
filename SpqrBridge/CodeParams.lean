@@ -3,7 +3,7 @@ Copyright (c) 2026 Beneficial AI Foundation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
-import SpqrBridge.W0.Seeded
+import SpqrBridge.CodePrims
 import SpqrBridge.Adapter
 import SpqrBridge.PolyDecoderLawful
 import SecureMessaging.SCKA.SPQR.Construction
@@ -25,7 +25,7 @@ The theorems with `sorry` bodies in this file are W1 obligations of
 `docs/bridge-step2-plan.md`.
 -/
 
-namespace SpqrBridge.W0
+namespace SpqrBridge
 
 open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
 open ErasureCodePayload.Streaming
@@ -213,4 +213,4 @@ noncomputable def codeIrl : codeKem.IncrementalRandLeak codeInc where
 noncomputable def smScheme (sampleInitKey : ProbComp InitKey) :=
   SPQR.scheme codeParams codeAuth codeIrl sampleInitKey
 
-end SpqrBridge.W0
+end SpqrBridge

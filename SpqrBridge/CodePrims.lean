@@ -22,7 +22,7 @@ The theorem `codePrims_agreesSeeded` is a W1 obligation of `docs/bridge-step2-pl
 be total and the code gives a length only on its own domain.
 -/
 
-namespace SpqrBridge.W0
+namespace SpqrBridge
 
 open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
 
@@ -133,4 +133,4 @@ noncomputable def codePrims : CodePrims where
 theorem codePrims_agreesSeeded : CodeAgreesSeeded codePrims := by
   sorry
 
-end SpqrBridge.W0
+end SpqrBridge

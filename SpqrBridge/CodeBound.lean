@@ -3,7 +3,7 @@ Copyright (c) 2026 Beneficial AI Foundation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
-import SpqrBridge.W0.Params
+import SpqrBridge.CodeParams
 import SpqrBridge.EpochBound
 import SpqrBridge.PolyEncoderChunk
 import SpqrBridge.PotentialTransferSPQR
@@ -25,7 +25,7 @@ This file fixes the statements that the rest of step 2 proves or assumes
 Every `sorry` in this file is a proof obligation of W1, W2, W4 or W5. None is in a definition.
 -/
 
-namespace SpqrBridge.W0
+namespace SpqrBridge
 
 open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
 open OracleSpec OracleComp ENNReal
@@ -179,4 +179,4 @@ theorem code_correctness_error_le (hB : BridgeObligations) (sampleInitKey : Prob
       (q : ℝ≥0∞) * codeKem.correctnessError ProbCompRuntime.probComp := by
   sorry
 
-end SpqrBridge.W0
+end SpqrBridge
