@@ -300,4 +300,45 @@ theorem bytesForm_parse (K : ℕ) (v : List Std.U8) (hv : v.length = 32 * K) :
   simp only [codecOf, bytesForm, Option.some.injEq]
   exact Subtype.ext (bytesOfChunks_unflatten K v hv)
 
+/-! ## Encoders -/
+
+/-- The chunks of `32 K` bytes, flattened, are the bytes. -/
+theorem flatten_chunkOf (K : ℕ) (b : B (32 * K)) : L2.flatten (chunkOf K b) = b.1 := by
+  apply List.ext_getElem (by rw [L2.flatten_length, b.2])
+  intro t ht _
+  rw [L2.flatten_length] at ht
+  have hb := b.2
+  simp only [L2.flatten, List.getElem_ofFn, chunkOf, Array.make_val]
+  have h32 : ((b.1.drop (32 * (t / 32))).take 32).length = 32 := by
+    simp only [List.length_take, List.length_drop, hb]; omega
+  rw [fit_of_length h32, getElem!_pos _ _ (by rw [h32]; omega), List.getElem_take,
+    List.getElem_drop]
+  congr 1
+  omega
+
+open spqr.encoding.polynomial.PolyEncoder.Insts.SpqrEncodingEncoder in
+/-- `Encode` of the bytes of a payload in a byte form gives an encoder at counter `0` that holds
+the payload's chunks. -/
+theorem codePrims_encode {M : Type} {K : ℕ} (f : ByteForm M K) (hK : K ≤ 2 ^ 15) (p : M) :
+    L2.EncInv ((codecOf f).ser p) (codePrims.encode (f.toBytes p).1) ∧
+      (codePrims.encode (f.toBytes p).1).idx.val = 0 := by
+  have hmax := L2.usize_max_ge
+  have hl := (f.toBytes p).2
+  have hfl : L2.flatten ((codecOf f).ser p) = (f.toBytes p).1 := flatten_chunkOf K _
+  let sl : Slice Std.U8 := Slice.from (f.toBytes p).1 (by omega)
+  obtain ⟨res, hres, hpost⟩ := WP.spec_imp_exists (encode_bytes_spec sl
+    (by simp only [sl, Slice.length, Slice.from_val, hl]; omega)
+    (by simp only [sl, Slice.length, Slice.from_val, hl]; omega))
+  obtain ⟨e, rfl⟩ : ∃ e, res = .Ok e := by
+    rcases res with e | _
+    · exact ⟨e, rfl⟩
+    · exact hpost.elim
+  obtain ⟨s', hs', henc⟩ := pick_spec (p := fun e => ∃ s : Slice Std.U8,
+    s.val = (f.toBytes p).1 ∧ encode_bytes s = ok (.Ok e)) ⟨e, sl, Slice.from_val .., hres⟩
+  have hs'' : s' = Slice.from (L2.flatten ((codecOf f).ser p)) (by rw [hfl]; omega) :=
+    Slice.ext _ _ (by rw [hs', Slice.from_val, hfl])
+  rw [hs''] at henc
+  obtain ⟨h0, hinv⟩ := L2.encode_bytes_inv hK _ _ _ henc
+  exact ⟨hinv, h0⟩
+
 end SpqrBridge

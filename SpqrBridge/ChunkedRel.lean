@@ -16,7 +16,8 @@ of `SPQR.Chunked` over `codeParams` (`docs/bridge-step2-plan.md`, W2):
 * the decoders are equal (both are `PolyDecoder`), and each needs `16 K` points and has sorted
   slots (`DecWF`);
 * each code encoder holds the payload of the secure-messaging encoder at the counter
-  `nextIndex mod 2^32`, the form of `next_chunk_wrap` (`EncRel`).
+  `nextIndex mod 2^32`, the form of `next_chunk_wrap` (`EncRel`);
+* the `Braid` authenticator has a 32-byte MAC key, so that `fit 32` is the identity on its MACs.
 
 `RA s st` composes `Refines` with `ChunkedRel`. `RM` relates the code's messages to
 secure-messaging's.
@@ -45,9 +46,16 @@ def EncRel {M : Type} (K : ℕ) (hK : 0 < K) (hKN : K ≤ 2 ^ 16) (cd : L2.Codec
   es.ecp = L2.ecp K hK hKN cd ∧ L2.EncInv (cd.ser es.payload) enc ∧
     enc.idx.val = es.nextIndex % 2 ^ 32
 
-/-- `ChunkedRel σ st`: the same state of §2.5 with equal values. The `Braid` header in
+/-- The authenticator that every `Braid` state holds. -/
+def authOf : BState → Auth
+  | .keysUnsampled _ a | .keysSampled _ a .. | .headerSent _ a .. | .ct1Received _ a ..
+  | .ekSentCt1Received _ a .. | .noHeaderReceived _ a .. | .headerReceived _ a ..
+  | .ct1Sampled _ a .. | .ekReceivedCt1Sampled _ a .. | .ct1Acknowledged _ a ..
+  | .ct2Sampled _ a .. => a
+
+/-- `SameState σ st`: the same state of §2.5 with equal values. The `Braid` header in
 `keysSampled` and `ekReceivedCt1Sampled`, which `Refines` leaves free, is the header of `st`. -/
-def ChunkedRel : BState → SMState → Prop
+def SameState : BState → SMState → Prop
   | .keysUnsampled e a, .keysUnsampled core => e = core.ep ∧ a = core.authSt
   | .keysSampled e a dk hdr ek enc, .keysSampled core es =>
     e = core.ep ∧ a = core.authSt ∧ dk = core.sk.1 ∧ hdr = core.pk.1.1.1 ∧
@@ -76,6 +84,11 @@ def ChunkedRel : BState → SMState → Prop
   | .ct2Sampled e a enc, .ct2Sampled core es =>
     e = core.ep ∧ a = core.authSt ∧ EncRel 5 (by decide) (by decide) ct2Codec enc es
   | _, _ => False
+
+/-- `ChunkedRel σ st`: `σ` and `st` are the same state with equal values, and the MAC key of
+`σ` has 32 bytes. -/
+def ChunkedRel (σ : BState) (st : SMState) : Prop :=
+  (authOf σ).macKey.length = 32 ∧ SameState σ st
 
 /-- The relation of party states: the code state refines a `Braid` state that is related to the
 secure-messaging state. -/
