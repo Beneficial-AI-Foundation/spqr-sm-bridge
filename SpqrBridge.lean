@@ -3,3 +3,5 @@ import SpqrBridge.PolyDecoderLawful
 import SpqrBridge.PolyEncoderChunk
 import SpqrBridge.Adapter
 import SpqrBridge.EpochBound
+import SpqrBridge.PotentialTransfer
+import SpqrBridge.PotentialTransferSPQR
