@@ -88,4 +88,22 @@ theorem decaps_ok_length (dk ct1 ct2 ss : alloc.vec.Vec Std.U8)
     Aeneas.Std.Array.length_eq]
   rfl
 
+/-- On inputs of at most `u32::MAX` bytes, the MAC has 32 bytes. This is the bound of the HMAC
+axiom `hmac_sha256_tag32_spec`; the contract `mac_length` states `usize::MAX`, which no axiom
+covers. -/
+theorem mac_length_u32 (k d : Bytes) (hk : k.length ≤ Std.U32.max) (hd : d.length ≤ Std.U32.max) :
+    (codePrims.mac k d).length = 32 := by
+  have hu : Std.U32.max ≤ Std.Usize.max := by scalar_tac
+  let ks : Slice Std.U8 := Slice.from k (le_trans hk hu)
+  let ds : Slice Std.U8 := Slice.from d (le_trans hd hu)
+  have hs := libcrux_hmac.hmac_sha256_tag32_spec ks ds
+    (by simp only [ks, Slice.length, Slice.from_val]; exact hk)
+    (by simp only [ds, Slice.length, Slice.from_val]; exact hd)
+  obtain ⟨t, ht⟩ := exists_ok_of_spec hs
+  have := codePrims_agreesSeeded.mac ks ds t ht
+  simp only [ks, ds, Slice.from_val] at this
+  have hl := WP.post_of_ok hs ht
+  rw [this]
+  exact hl
+
 end SpqrBridge
