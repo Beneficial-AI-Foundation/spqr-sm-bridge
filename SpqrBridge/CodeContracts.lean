@@ -90,7 +90,9 @@ def Samples : States → Prop
 /-- A `send` that does not sample ignores the tape. (W1.) -/
 theorem codeSend_tape_irrel (s : States) (hs : ¬ Samples s) (t t' : List Std.U8) :
     codeSend s t = codeSend s t' := by
-  sorry
+  refine codeSend_congr s s t t' (dropRng_send_irrel s ?_ ?_ t t')
+  · rintro st rfl; exact hs trivial
+  · rintro st rfl; exact hs trivial
 
 /-- A `send` reads at most the first 64 bytes of a tape of at least 64 bytes. This is the
 adapter between the fresh 64-byte tape of `codeScheme` and the single infinite tape of #787:
