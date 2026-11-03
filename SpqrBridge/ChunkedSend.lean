@@ -105,10 +105,9 @@ theorem encStep (hB : BridgeObligations) {M : Type} (K : ℕ) (hK : 0 < K) (hKN 
 /-- The send arms that do not sample: `Chunked.send` is a pure result, and `Braid.send` with any
 randomness agrees with it. -/
 theorem braid_send_pure (hB : BridgeObligations) (σ : BState) (st : SMState)
-    (hrel : ChunkedRel σ st) (hs : ¬ (∃ c, st = .keysUnsampled c) ∧ ¬ ∃ c d, st = .headerReceived c d)
-    (r : Bytes) :
+    (hrel : ChunkedRel σ st) (hs : ¬ (∃ c, st = .keysUnsampled c) ∧ ¬ ∃ c d, st = .headerReceived c d) :
     ∃ res, SPQR.Chunked.send codeParams codeAuth st = pure res ∧
-      SendAgree (Braid.send codePrims σ r) res := by
+      ∀ r, SendAgree (Braid.send codePrims σ r) res := by
   obtain ⟨hmk, hst⟩ := hrel
   rcases st with ⟨ep, a⟩ | ⟨⟨ep, a, pk, sk⟩, es⟩ | ⟨⟨ep, a, sk⟩, es, dec⟩ |
       ⟨⟨ep, a, sk, c1⟩, es⟩ | ⟨⟨ep, a, sk, c1⟩, dec⟩ | ⟨⟨ep, a⟩, dec⟩ | ⟨⟨ep, a, hdr⟩, dec⟩ |
@@ -119,55 +118,55 @@ theorem braid_send_pure (hB : BridgeObligations) (σ : BState) (st : SMState)
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, rfl, henc⟩ := hst
     obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 3 _ _ hdrCodec (by decide) enc es henc
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, rfl, fun r => ?_⟩
     simp only [Braid.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, rfl, hrel'⟩, rfl, hc, rfl, rfl⟩
   · rcases σ with _ | _ | ⟨e, a', dk, d, enc⟩ | _ | _ | _ | _ | _ | _ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, hwf, henc⟩ := hst
     obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 36 _ _ ekCodec (by decide) enc es henc
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, rfl, fun r => ?_⟩
     simp only [Braid.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, hwf, hrel'⟩, rfl, hc, rfl, rfl⟩
   · rcases σ with _ | _ | _ | ⟨e, a', dk, ct1, enc⟩ | _ | _ | _ | _ | _ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, henc⟩ := hst
     obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 36 _ _ ekCodec (by decide) enc es henc
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, rfl, fun r => ?_⟩
     simp only [Braid.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, hrel'⟩, rfl, hc, rfl, rfl⟩
   · rcases σ with _ | _ | _ | _ | ⟨e, a', dk, ct1, d⟩ | _ | _ | _ | _ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, rfl, hwf⟩ := hst
-    exact ⟨_, rfl, ⟨hmk, rfl, rfl, rfl, rfl, rfl, hwf⟩, rfl, trivial, rfl, rfl⟩
+    exact ⟨_, rfl, fun _ => ⟨⟨hmk, rfl, rfl, rfl, rfl, rfl, hwf⟩, rfl, trivial, rfl, rfl⟩⟩
   · rcases σ with _ | _ | _ | _ | _ | ⟨e, a', d⟩ | _ | _ | _ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, hwf⟩ := hst
-    exact ⟨_, rfl, ⟨hmk, rfl, rfl, rfl, hwf⟩, rfl, trivial, rfl, rfl⟩
+    exact ⟨_, rfl, fun _ => ⟨⟨hmk, rfl, rfl, rfl, hwf⟩, rfl, trivial, rfl, rfl⟩⟩
   · exact absurd ⟨_, _, rfl⟩ hs.2
   · rcases σ with _ | _ | _ | _ | _ | _ | _ | ⟨e, a', hdr', es, ct1, enc, d⟩ | _ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, rfl, henc, rfl, hwf⟩ := hst
     obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 30 _ _ ct1Codec (by decide) enc ecs henc
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, rfl, fun r => ?_⟩
     simp only [Braid.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, rfl, hrel', rfl, hwf⟩, rfl, hc, rfl, rfl⟩
   · rcases σ with _ | _ | _ | _ | _ | _ | _ | _ | ⟨e, a', es, ct1, hdr', ek, enc⟩ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, henc⟩ := hst
     obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 30 _ _ ct1Codec (by decide) enc ecs henc
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, rfl, fun r => ?_⟩
     simp only [Braid.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, rfl, rfl, hrel'⟩, rfl, hc, rfl, rfl⟩
   · rcases σ with _ | _ | _ | _ | _ | _ | _ | _ | _ | ⟨e, a', hdr', es, ct1, d⟩ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, hwf⟩ := hst
-    exact ⟨_, rfl, ⟨hmk, rfl, rfl, rfl, rfl, rfl, rfl, hwf⟩, rfl, trivial, rfl, rfl⟩
+    exact ⟨_, rfl, fun _ => ⟨⟨hmk, rfl, rfl, rfl, rfl, rfl, rfl, hwf⟩, rfl, trivial, rfl, rfl⟩⟩
   · rcases σ with _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | ⟨e, a', enc⟩ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, henc⟩ := hst
     obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 5 _ _ ct2Codec (by decide) enc es henc
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, rfl, fun r => ?_⟩
     simp only [Braid.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, hrel'⟩, rfl, hc, rfl, rfl⟩
 
