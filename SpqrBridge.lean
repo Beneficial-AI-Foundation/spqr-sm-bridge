@@ -1,1 +1,3 @@
 import SpqrBridge.ImportProbe
+import SpqrBridge.PotentialTransfer
+import SpqrBridge.PotentialTransferSPQR
