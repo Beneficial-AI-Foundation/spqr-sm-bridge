@@ -47,7 +47,7 @@ Three choices differ from the plan:
 | `polyStreamDecoder_decoded_code` | `CodeContracts.lean` | proved |
 
 The receive arms are the `recv_*` theorems in `ChunkedRecv.lean`, one per state and payload that
-`Chunked.recv` acts on (eight theorems for eleven state and payload pairs). `chunked_recv_braid` adds the stale epoch, the
+`Chunked.recv` acts on (nine theorems for eleven state and payload pairs). `chunked_recv_braid` adds the stale epoch, the
 successor epoch in `ct2Sampled`, the future-epoch error and all ignored messages. The send arms
 are `braid_send_pure` (nine states, `ChunkedSend.lean`), `keysUnsampled_agree` and
 `headerReceived_agree`.
