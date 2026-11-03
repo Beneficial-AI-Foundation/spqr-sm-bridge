@@ -74,11 +74,13 @@ theorem kdfOK_agree (k : B 32) (ep : Std.U64) :
   rw [kdfOKTotal, codePrims_agreesSeeded.kdfOk k.1 ep]
   exact fit_of_length (crypto.hkdf_length _ _ _ _)
 
-/-- On inputs that fit in a slice, the MAC has 32 bytes. So `fit 32` is the identity on the
-MACs of `codeAuth`. (W1.) -/
-theorem mac_length (k d : Bytes) (hk : k.length ≤ Std.Usize.max) (hd : d.length ≤ Std.Usize.max) :
-    (codePrims.mac k d).length = 32 := by
-  sorry
+/-- On inputs of at most `u32::MAX` bytes, the MAC has 32 bytes. So `fit 32` is the identity on
+the MACs of `codeAuth`, whose inputs are short. The bound is the one of the HMAC axiom
+`hmac_sha256_tag32_spec`: past it the Rust glue panics, and no axiom says that `hmac`
+succeeds. -/
+theorem mac_length (k d : Bytes) (hk : k.length ≤ Std.U32.max) (hd : d.length ≤ Std.U32.max) :
+    (codePrims.mac k d).length = 32 :=
+  mac_length_u32 k d hk hd
 
 /-! ## Tape (W1) -/
 
