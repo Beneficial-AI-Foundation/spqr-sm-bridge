@@ -8,8 +8,9 @@ import SpqrBridge.ChunkedSend
 /-!
 # `send_chunked`: every send arm
 
-The two sampling arms (`keysUnsampled`, `headerReceived`) and the coupling of the code's send
-with `Chunked.send` (`send_chunked`).
+The two sampling arms (`keysUnsampled`, `headerReceived`), the coupling of the code's send with
+`Chunked.send` (`send_chunked`), and the relation of the initial states (`ra_initA`,
+`ra_initB`).
 -/
 
 namespace SpqrBridge
@@ -164,5 +165,24 @@ theorem send_chunked (hB : BridgeObligations) (sampleInitKey : ProbComp InitKey)
     rw [hres, pure_bind]
     exact relTriple_sampleTape_pure (fun t => sendStep s t.1) _ _ fun t =>
       sendRel_of_braid hB s n σ hreach hσ hep t res (hagree _)
+
+/-! ## Initial states -/
+
+/-- The initial states are related: A's. -/
+theorem ra_initA (k : InitKey) :
+    RA (initAState k) (SPQR.Chunked.initA codeParams codeAuth k) :=
+  ⟨_, (init_refines codePrims codePrims_agreesSeeded.toCodeAgrees k.1).1 _ (init_a_eq k),
+    auth_update_macKey_length _ (by norm_num) _, rfl, rfl⟩
+
+/-- The initial states are related: B's. -/
+theorem ra_initB (k : InitKey) :
+    RA (initBState k) (SPQR.Chunked.initB codeParams codeAuth k) := by
+  refine ⟨_, (init_refines codePrims codePrims_agreesSeeded.toCodeAgrees k.1).2 _ (init_b_eq k),
+    auth_update_macKey_length _ (by norm_num) _, rfl, rfl, ?_, ?_⟩
+  · rw [codePrims_headerSize, codePrims_macSize]
+    exact codePrims_decoderNew 3 (by decide) hdrCodec
+  · rw [codePrims_headerSize, codePrims_macSize, show 64 + 32 = 32 * 3 from rfl,
+      codePrims_decoderNew 3 (by decide) hdrCodec]
+    exact decWF_empty 3 (by decide) hdrCodec
 
 end SpqrBridge
