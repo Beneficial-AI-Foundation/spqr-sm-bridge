@@ -223,11 +223,15 @@ abbrev Sym := Std.Array U8 32#usize
 /-- Word `j` (big-endian bytes `2j`, `2j+1`) of a 32-byte chunk, as a natural number. -/
 def word (c : Sym) (j : ℕ) : ℕ := 256 * (c.val[2 * j]!).val + (c.val[2 * j + 1]!).val
 
+/-- Word `j` of chunk `k` of the payload, or `0` past the last chunk. -/
+def wordAt {K : ℕ} (msg : Fin K → Sym) (k j : ℕ) : ℕ :=
+  if h : k < K then word (msg ⟨k, h⟩) j else 0
+
 /-- The polynomial of slot `j` for a payload of `K` chunks: the interpolant of degree `< K`
 through `(k, word j of chunk k)` for `k < K`. -/
 noncomputable def codePoly {K : ℕ} (msg : Fin K → Sym) (j : ℕ) : GF216[X] :=
-  Lagrange.interpolate Finset.univ (fun k : Fin K => k.val.toGF216)
-    (fun k => (word (msg k) j).toGF216)
+  Lagrange.interpolate (Finset.range K) (fun k : ℕ => k.toGF216)
+    (fun k => (wordAt msg k j).toGF216)
 
 /-- The byte with value `n % 256`. -/
 def byteOf (n : ℕ) : U8 := ⟨BitVec.ofNat 8 n⟩
@@ -302,6 +306,32 @@ def emptyDecoder (K : ℕ) (hK : 16 * K ≤ Usize.max) : PolyDecoder :=
     pts := Array.make 16#usize (List.replicate 16 default)
     is_complete := false }
 
+open spqr.encoding.polynomial.PolyDecoder.Insts.SpqrEncodingDecoder in
+/-- `PolyDecoder::new(32 * K)` returns `emptyDecoder K`. -/
+theorem new_eq_emptyDecoder (K : ℕ) (hK : 16 * K ≤ Usize.max) (h32 : 32 * K ≤ Usize.max) :
+    new (UScalar.ofNatCore (32 * K) (by
+        have := Nat.two_pow_pos System.Platform.numBits
+        simp only [Usize.max, UScalarTy.numBits, Usize.numBits] at *; omega)) =
+      .ok (.Ok (emptyDecoder K hK)) := by
+  obtain ⟨r, hr, hp⟩ := WP.spec_imp_exists (new_spec (UScalar.ofNatCore (32 * K) (by
+        have := Nat.two_pow_pos System.Platform.numBits
+        simp only [Usize.max, UScalarTy.numBits, Usize.numBits] at *; omega)))
+  rw [hr]
+  simp only [UScalar.ofNatCore_val_eq] at hp
+  rw [if_pos (by omega)] at hp
+  rcases r with pd | e
+  · obtain ⟨h1, h2, h3⟩ := hp
+    congr 2
+    obtain ⟨pn, pts, ic⟩ := pd
+    simp only at h1 h2 h3
+    simp only [emptyDecoder, h3, PolyDecoder.mk.injEq, and_true]
+    refine ⟨?_, ?_⟩
+    · apply UScalar.eq_of_val_eq
+      rw [h1]; simp only [UScalar.ofNatCore_val_eq]; simp [UScalar.val]; omega
+    · apply Aeneas.Std.Array.ext
+      rw [h2, Array.make_val]
+  · exact hp.elim
+
 /-- Cut `32 * K` bytes into `K` chunks of 32 bytes. -/
 def unflatten (K : ℕ) (v : List U8) : Fin K → Sym :=
   fun c => Array.make 32#usize (List.ofFn (fun b : Fin 32 => v[32 * c.val + b.val]!))
@@ -358,19 +388,20 @@ theorem lookupY_some (l : List Pt) (x : ℕ) (y : GF16) (h : lookupY l x = some 
       · cases h
 
 theorem nodes_injOn (K : ℕ) (hKN : K ≤ 2 ^ 16) :
-    Set.InjOn (fun k : Fin K => k.val.toGF216) ↑(Finset.univ : Finset (Fin K)) := by
-  intro a _ b _ h
-  exact Fin.ext (natToGF216_inj (by omega) (by omega) h)
+    Set.InjOn (fun k : ℕ => k.toGF216) ↑(Finset.range K) := by
+  intro a ha b hb h
+  simp only [Finset.coe_range, Set.mem_Iio] at ha hb
+  exact natToGF216_inj (by omega) (by omega) h
 
 /-- At node `k < K`, the polynomial of slot `j` is word `j` of chunk `k`. -/
 theorem codePoly_eval_node {K : ℕ} (hKN : K ≤ 2 ^ 16) (msg : Fin K → Sym) (j : ℕ) (k : Fin K) :
     (codePoly msg j).eval k.val.toGF216 = (word (msg k) j).toGF216 := by
-  rw [codePoly]
-  exact Lagrange.eval_interpolate_at_node _ (nodes_injOn K hKN) (Finset.mem_univ k)
+  rw [codePoly, Lagrange.eval_interpolate_at_node _ (nodes_injOn K hKN)
+    (Finset.mem_range.mpr k.2), wordAt, dite_eq_left k.2]
 
 theorem codePoly_degree_lt {K : ℕ} (hKN : K ≤ 2 ^ 16) (msg : Fin K → Sym) (j : ℕ) :
     (codePoly msg j).degree < K := by
-  have := Lagrange.degree_interpolate_lt (r := fun k : Fin K => (word (msg k) j).toGF216)
+  have := Lagrange.degree_interpolate_lt (r := fun k : ℕ => (wordAt msg k j).toGF216)
     (nodes_injOn K hKN)
   simpa [codePoly] using this
 
