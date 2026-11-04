@@ -1,6 +1,6 @@
 /-
 Copyright (c) 2026 Beneficial AI Foundation. All rights reserved.
-Released under Apache 2.0 license as described in the file LICENSE.
+Released under MIT license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
 import SpqrBridge.CodeContracts
@@ -9,7 +9,7 @@ import SpqrBridge.CodeContracts
 # The relation between `Braid` and secure-messaging's `SPQR.Chunked`
 
 `ChunkedRel σ st` relates a state of the abstract machine `Braid` (over `codePrims`) to a state
-of `SPQR.Chunked` over `codeParams` (`docs/bridge-step2-plan.md`, W2):
+of `SPQR.Chunked` over `codeParams`:
 
 * the same constructor, equal epochs and equal authenticators;
 * each byte field of `Braid` is the value of the typed field of `codeParams`;

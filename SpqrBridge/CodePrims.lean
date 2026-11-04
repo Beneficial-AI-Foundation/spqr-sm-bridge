@@ -1,6 +1,6 @@
 /-
 Copyright (c) 2026 Beneficial AI Foundation. All rights reserved.
-Released under Apache 2.0 license as described in the file LICENSE.
+Released under MIT license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
 import Spqr.Specs.Braid.StateMachine.Refinement
@@ -16,7 +16,7 @@ the first 64 bytes of its randomness. `Encaps1` is the FIPS 203 model of `encaps
 first 32 bytes. Every other primitive is the code's own function where that function succeeds.
 
 `CodeAgreesSeeded P` is `CodeAgrees P` with key generation and `Encaps1` pinned to these models.
-The theorem `codePrims_agreesSeeded` is a W1 obligation of `docs/bridge-step2-plan.md`.
+`codePrims_agreesSeeded` proves that `codePrims` satisfies it.
 
 `fit n l` is the total way to read a byte list as `n` bytes: `l` itself when it has length
 `n`, and `n` zero bytes otherwise. The bridge uses it wherever a secure-messaging field must
@@ -130,7 +130,7 @@ noncomputable def codePrims : CodePrims where
 /-- `codePrims` agrees with the code on its seeded calls. The fields other than `keyGen` and
 `encaps1` follow `codeAgrees_exists`. `keyGen` and `encaps1` follow `generate_spec` and the
 `encaps1` spec of #661, with the seed and the message read back from the bytes that
-`fill_bytes` wrote. (W1.) -/
+`fill_bytes` wrote. -/
 theorem codePrims_agreesSeeded : CodeAgreesSeeded codePrims := by
   have pick_eq : ∀ {β : Type} [Nonempty β] {p : β → Prop} {b : β}, p b →
       (∀ b', p b' → b' = b) → pick p = b := by

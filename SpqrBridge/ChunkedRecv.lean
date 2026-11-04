@@ -1,6 +1,6 @@
 /-
 Copyright (c) 2026 Beneficial AI Foundation. All rights reserved.
-Released under Apache 2.0 license as described in the file LICENSE.
+Released under MIT license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
 import SpqrBridge.ChunkedFacts
@@ -322,7 +322,7 @@ theorem recv_noHeaderReceived_hdr (hsz : MlkemSizes) (σ : BState) (ep : ℕ) (a
     · simp only [hm, ↓reduceIte] at hr
       cases hr
 
-/-- `Encaps2` on a 2080-byte state and a 1152-byte vector returns 128 bytes. (From the W1
+/-- `Encaps2` on a 2080-byte state and a 1152-byte vector returns 128 bytes. (From the
 contracts `encaps2_ok` and `encaps2_agree`.) -/
 theorem codePrims_encaps2_length (es hdr ek : Bytes) (hes : es.length = 2080)
     (hek : ek.length = 1152) : (codePrims.encaps2 es hdr ek).length = 128 := by
@@ -539,7 +539,7 @@ theorem recv_ekReceivedCt1Sampled_ack (σ : BState) (ep : ℕ) (a : Auth) (hdr :
       ite_false, Braid.receiveEq] <;>
     exact ⟨_, rfl, completeCt2_rel ep' a' hdr es c1 vec h64 hmk, trivial⟩
 
-/-- The feasibility test of W2: the one-sided receive relation for a `ct2` chunk in
+/-- The one-sided receive relation for a `ct2` chunk in
 `ekSentCt1Received`. -/
 theorem recvRel_ekSentCt1Received_ct2 (hB : BridgeObligations) (s : States) (n : ℕ) (ep : ℕ)
     (a : Auth) (sk : B 2400) (c1 : B 960) (dec : encoding.polynomial.PolyDecoder)

@@ -1,6 +1,6 @@
 /-
 Copyright (c) 2026 Beneficial AI Foundation. All rights reserved.
-Released under Apache 2.0 license as described in the file LICENSE.
+Released under MIT license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
 import SpqrBridge.ChunkedRel
@@ -10,7 +10,7 @@ import Spqr.Specs.IncrementalMlkem768.Decaps
 # Facts about `codePrims` for the `Braid` → `Chunked` relation
 
 `codePrims` reads each primitive with `pick`, so its value is the code's own wherever the code
-succeeds. This file proves the instances that the arms of W2 use: the sizes, the lengths of
+succeeds. This file proves the instances that the arms of the relation use: the sizes, the lengths of
 `KDF_OK`, `KDF_AUTH`, `ToBytes`, `MAC` and `Decaps`, and one decoder step (`decStep`), which runs
 `add_chunk` and `decoded_message` on a well-formed decoder and relates the result to
 `polyStreamDecoder`.

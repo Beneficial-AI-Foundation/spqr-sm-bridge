@@ -4,14 +4,18 @@ defaultTargets = ["SpqrBridge"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+# The header linter inherited from Spqr checks this package's license line.
+weak.linter.style.headerAlt.license = "Released under MIT license as described in the file LICENSE."
 
 [[require]]
 name = "Spqr"
-path = "../spqr"
+git = "https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify.git"
+rev = "1017e5236c367153b0d22e5afa0ee365e7ee2cc3"
 
 [[require]]
 name = "SecureMessaging"
-path = "../sm"
+git = "https://github.com/Beneficial-AI-Foundation/secure-messaging.git"
+rev = "c16e287c897b4f99bea7f9879abad338a2bf0618"
 
 [[lean_lib]]
 name = "SpqrBridge"

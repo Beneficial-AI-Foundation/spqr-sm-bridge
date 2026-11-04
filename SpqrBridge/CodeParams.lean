@@ -1,6 +1,6 @@
 /-
 Copyright (c) 2026 Beneficial AI Foundation. All rights reserved.
-Released under Apache 2.0 license as described in the file LICENSE.
+Released under MIT license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
 import SpqrBridge.CodePrims
@@ -22,9 +22,6 @@ Sampling uses `sampleTape`, the same 64-byte tape as `codeScheme`. Key generatio
 whole tape, and `Encaps1` its first 32 bytes, as the code does.
 
 `codeKem` is the KEM of `codeParams`. Its correctness error is the `ε` of the code-level bound.
-
-The theorems with `sorry` bodies in this file are W1 obligations of
-`docs/bridge-step2-plan.md`.
 -/
 
 namespace SpqrBridge
@@ -45,7 +42,7 @@ def bytesOfChunks (K : ℕ) (c : Fin K → L2.Sym) : B (32 * K) :=
     simp [List.length_flatten, List.map_ofFn, Function.comp_def]
     ring⟩
 
-/-- `bytesOfChunks` inverts `chunkOf`. (W1.) -/
+/-- `bytesOfChunks` inverts `chunkOf`. -/
 theorem bytesOfChunks_chunkOf (K : ℕ) (b : B (32 * K)) : bytesOfChunks K (chunkOf K b) = b := by
   apply Subtype.ext
   have hc : ∀ i : Fin K, (chunkOf K b i).val = (b.1.drop (32 * i.val)).take 32 := by
@@ -102,7 +99,7 @@ def ct2Codec : L2.Codec (B 128 × B 32) 5 := codecOf (pairForm 128 32 5 rfl)
 abbrev PK : Type := {p : B 64 × B 1152 // codePrims.ekMatches p.1.1 p.2.1 = true}
 
 /-- Generated keys are valid. With `CodeAgreesSeeded`, this is `pk1HashValid_pk1Bytes` and
-`pk2Valid_pk2Bytes` of #661. (W1.) -/
+`pk2Valid_pk2Bytes` of #661. -/
 theorem keyGen_valid (r : Bytes) :
     codePrims.ekMatches (fit 64 (codePrims.keyGen r).2.1).1
       (fit 1152 (codePrims.keyGen r).2.2).1 = true := by

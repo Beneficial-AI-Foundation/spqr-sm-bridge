@@ -1,6 +1,6 @@
 /-
 Copyright (c) 2026 Beneficial AI Foundation. All rights reserved.
-Released under Apache 2.0 license as described in the file LICENSE.
+Released under MIT license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
 import SpqrBridge.BudgetedPotential
@@ -11,17 +11,17 @@ import SpqrBridge.PotentialTransferSPQR
 import SpqrBridge.GameInvSteps
 
 /-!
-# The frozen interfaces of step 2
+# The invariant, the transfer statement and the assumptions
 
-This file fixes the statements that the rest of step 2 proves or assumes
-(`docs/bridge-step2-plan.md`, W0):
+This file states the pieces from which `code_correctness_error_le` is proved:
 
 * `CodeGameInv`: the code game state is reachable, its recorded messages are the messages of
   that run, and its send counters count the successful sends.
 * `BudgetedTransferObligations` and `correctness_error_le_of_budgeted_transfer`: the transfer of
-  probe 1c with a code-side invariant and a send budget (W4).
-* `BridgeObligations`: exactly the allowed assumptions of the plan. Its fields go away once
-  #782 is done.
+  `correctness_error_le_of_transfer` (`PotentialTransfer.lean`), with a code-side invariant and a
+  send budget.
+* `BridgeObligations`: the facts about the code that the theorem assumes. Each field names the
+  issue of SparsePostQuantumRatchet-verify that proves it.
 
 The conditional code-level bound `code_correctness_error_le` is in `SpqrBridge.CodeCorrectness`,
 because its proof uses the files that import this one.
@@ -51,13 +51,14 @@ def CodeGameInv (s : GameState States States (B 32) Message) : Prop :=
   ∃ mA mB, CodeReach s.stA s.stB mA mB (s.nA + s.nB) ∧
     RecordedAs s.msgA s.nA mA ∧ RecordedAs s.msgB s.nB mB
 
-/-! ## The budgeted transfer (W4) -/
+/-! ## The budgeted transfer -/
 
 section Budgeted
 
 variable {IK₁ StA₁ StB₁ Rho₁ Rand₁ IK₂ StA₂ StB₂ Rho₂ Rand₂ I : Type} [DecidableEq I]
 
-/-- The obligations of probe 1c, with a code-side invariant `Inv₁` and a send budget `Bud`. A
+/-- The obligations of `TransferObligations`, with a code-side invariant `Inv₁` and a send
+budget `Bud`. A
 send query needs the step obligation only below the budget. A receive query needs it up to the
 budget, which covers the deliveries after the last send. -/
 structure BudgetedTransferObligations
@@ -93,7 +94,7 @@ structure BudgetedTransferObligations
 /-- Let `S₂` meet the premises of `correctness_error_le_of_potential` with invariant `Inv₂`,
 potential `V₂` and error `ε`. Let `S₁` meet the budgeted obligations against `S₂` with budget
 `Bud`. Then every adversary against `S₁` with at most `q < Bud` sends breaks correctness with
-probability at most `q · ε`. (W4.) -/
+probability at most `q · ε`. -/
 theorem correctness_error_le_of_budgeted_transfer
     (S₁ : SCKAScheme ProbComp IK₁ StA₁ StB₁ I Rho₁ Rand₁)
     (S₂ : SCKAScheme ProbComp IK₂ StA₂ StB₂ I Rho₂ Rand₂)
@@ -125,8 +126,8 @@ def seedLen : State encoding.polynomial.PolyEncoder encoding.polynomial.PolyDeco
   | .headerReceived .. => 32
   | _ => 0
 
-/-- The allowed assumptions of `docs/bridge-step2-plan.md`. Each field names the issue that
-removes it. The bridge's own facts are theorems: `codeSend_key_length`, `codeRecv_key_length`
+/-- The facts about the code that `code_correctness_error_le` assumes. Each field names the issue
+of SparsePostQuantumRatchet-verify that proves it. The bridge's own facts are theorems: `codeSend_key_length`, `codeRecv_key_length`
 (`SpqrBridge.KeyLength`) and `next_chunk_wrap` (`SpqrBridge.NextChunkWrap`). -/
 structure BridgeObligations : Prop where
   /-- Imported fact, #786. -/

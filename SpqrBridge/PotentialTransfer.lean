@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2026 Beneficial AI Foundation. All rights reserved.
+Released under MIT license as described in the file LICENSE.
+Authors: Beneficial AI Foundation
+-/
 import SecureMessaging.SCKA.Correctness
 import VCVio.ProgramLogic.Relational.Basic
 
