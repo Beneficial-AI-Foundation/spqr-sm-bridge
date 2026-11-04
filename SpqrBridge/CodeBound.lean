@@ -20,11 +20,11 @@ This file fixes the statements that the rest of step 2 proves or assumes
   that run, and its send counters count the successful sends.
 * `BudgetedTransferObligations` and `correctness_error_le_of_budgeted_transfer`: the transfer of
   probe 1c with a code-side invariant and a send budget (W4).
-* `BridgeObligations`: exactly the allowed assumptions of the plan. Most fields go away once
+* `BridgeObligations`: exactly the allowed assumptions of the plan. Its fields go away once
   #782 is done.
-* `code_correctness_error_le`: the conditional code-level bound.
 
-Every `sorry` in this file is a proof obligation of W1, W2, W4 or W5. None is in a definition.
+The conditional code-level bound `code_correctness_error_le` is in `SpqrBridge.CodeCorrectness`,
+because its proof uses the files that import this one.
 -/
 
 namespace SpqrBridge
@@ -126,9 +126,8 @@ def seedLen : State encoding.polynomial.PolyEncoder encoding.polynomial.PolyDeco
   | _ => 0
 
 /-- The allowed assumptions of `docs/bridge-step2-plan.md`. Each field names the issue that
-removes it. Once #782 is done, only the bridge's own fields remain: `send_key_length`,
-`recv_key_length` and the counter part of `next_chunk_wrap`, besides the tape lemma that relates
-fresh tapes to #787's single tape. -/
+removes it. The bridge's own facts are theorems: `codeSend_key_length`, `codeRecv_key_length`
+(`SpqrBridge.KeyLength`) and `next_chunk_wrap` (`SpqrBridge.NextChunkWrap`). -/
 structure BridgeObligations : Prop where
   /-- Imported fact, #786. -/
   mlkem_sizes : MlkemSizes
@@ -152,34 +151,5 @@ structure BridgeObligations : Prop where
       Refines out.state (Braid.send codePrims σ (tape.take (seedLen σ))).1 ∧
         absMsg out.msg = (Braid.send codePrims σ (tape.take (seedLen σ))).2.1 ∧
         out.key.map absKey = (Braid.send codePrims σ (tape.take (seedLen σ))).2.2
-  /-- New, bridge: keys from a successful `send` have 32 bytes. -/
-  send_key_length : ∀ (s : States) (tape : List Std.U8) (out : v1.chunked.states.Send),
-    codeSend s tape = some out → ∀ es ∈ out.key, es.secret.val.length = 32
-  /-- New, bridge: keys from a successful `recv` have 32 bytes. -/
-  recv_key_length : ∀ (s : States) (msg : Message) (out : v1.chunked.states.Recv),
-    codeRecv s msg = some out → ∀ es ∈ out.key, es.secret.val.length = 32
-  /-- New, bridge (index part: #783): `next_chunk` emits `ecp.encode p n` while the stored
-  counter is `n mod 2^32`, across both wraps. -/
-  next_chunk_wrap : ∀ {M : Type} (K : ℕ) (hK : 0 < K) (hKN : K ≤ 2 ^ 16)
-    (cd : L2.Codec M K) (p : M) (n : ℕ) (enc : encoding.polynomial.PolyEncoder),
-    (K = 3 ∨ K = 5 ∨ K = 30 ∨ K = 36) → L2.EncInv (cd.ser p) enc → enc.idx.val = n % 2 ^ 32 →
-      ∃ c enc', encoding.polynomial.PolyEncoder.Insts.SpqrEncodingEncoder.next_chunk enc =
-          ok (c, enc') ∧
-        (c.index.val, c.data) = (L2.ecp K hK hKN cd).encode p n ∧
-        L2.EncInv (cd.ser p) enc' ∧ enc'.idx.val = (n + 1) % 2 ^ 32
-
-/-! ## The conditional code-level bound (W5) -/
-
-/-- Assume the allowed assumptions. Let `sampleInitKey` sample initial keys that the code
-accepts. Then every SCKA correctness adversary with at most `q` sends, across both parties,
-breaks some correctness assert on the code's chunked `States` machine with probability at most
-`q` times the correctness error of the code's KEM. The premise `BridgeObligations` is what makes
-this conditional: most of it goes away once #782 is done. (W5.) -/
-theorem code_correctness_error_le (hB : BridgeObligations) (sampleInitKey : ProbComp InitKey)
-    (adv : SCKACorrectnessAdversary Message) (q : ℕ)
-    (hq : SendQueryBound adv q) (hq64 : q + 2 < 2 ^ 64) :
-    1 - Pr{let x ← correctnessExp (codeScheme sampleInitKey) adv}[x = true] ≤
-      (q : ℝ≥0∞) * codeKem.correctnessError ProbCompRuntime.probComp := by
-  sorry
 
 end SpqrBridge

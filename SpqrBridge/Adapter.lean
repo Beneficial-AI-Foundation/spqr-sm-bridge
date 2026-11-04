@@ -22,8 +22,8 @@ secure-messaging `SCKAScheme`:
 * `send` reports the outgoing message's epoch minus 1, and `recv` reports the incoming
   message's epoch minus 1, as `lib.rs:298` and `lib.rs:425` select chain keys.
 
-The open obligations are `send_key_length` and `recv_key_length`. `CodeReach` is the set of
-code configurations that a correctness game reaches; `SpqrBridge.EpochBound` bounds their epochs.
+`CodeReach` is the set of code configurations that a correctness game reaches;
+`SpqrBridge.EpochBound` bounds their epochs.
 -/
 
 namespace SpqrBridge
@@ -154,8 +154,8 @@ noncomputable def codeRecv (s : States) (msg : Message) : Option v1.chunked.stat
   | _ => none
 
 /-- The key output as an SCKA key: the epoch and the 32-byte secret. The outer `none` means
-that the secret is not 32 bytes long; `send_key_length` and `recv_key_length` say that this
-does not happen. -/
+that the secret is not 32 bytes long; `codeSend_key_length` and `codeRecv_key_length`
+(`SpqrBridge.KeyLength`) say that this does not happen. -/
 def keyOf : Option EpochSecret → Option (Option (ℕ × B 32))
   | none => some none
   | some es =>
@@ -203,28 +203,6 @@ noncomputable def codeScheme (sampleInitKey : ProbComp InitKey) :
   sendB := codeSendA
   sendBrleak := codeSendRleak
   recvB := recvStep
-
-/-! ## Obligations -/
-
-/-- Every key that a successful `States::send` returns is 32 bytes long. Belongs in `spqr`. -/
-theorem send_key_length (s : States) (tape : List Std.U8) (out : v1.chunked.states.Send)
-    (h : codeSend s tape = some out) : ∀ es ∈ out.key, es.secret.val.length = 32 := by
-  sorry
-
-/-- Every key that a successful `States::recv` returns is 32 bytes long. Belongs in `spqr`. -/
-theorem recv_key_length (s : States) (msg : Message) (out : v1.chunked.states.Recv)
-    (h : codeRecv s msg = some out) : ∀ es ∈ out.key, es.secret.val.length = 32 := by
-  sorry
-
-/-- The open obligations of the adapter, as one structure. -/
-structure AdapterObligations : Prop where
-  send_key_length : ∀ (s : States) (tape : List Std.U8) (out : v1.chunked.states.Send),
-    codeSend s tape = some out → ∀ es ∈ out.key, es.secret.val.length = 32
-  recv_key_length : ∀ (s : States) (msg : Message) (out : v1.chunked.states.Recv),
-    codeRecv s msg = some out → ∀ es ∈ out.key, es.secret.val.length = 32
-
-theorem adapterObligations : AdapterObligations :=
-  ⟨send_key_length, recv_key_length⟩
 
 /-- The code states and messages that a correctness game can reach, with the number of
 successful sends. A failed call leaves both states unchanged in SM's oracles, so it is not a

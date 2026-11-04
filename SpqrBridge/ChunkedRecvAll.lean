@@ -140,7 +140,8 @@ theorem chunked_recv_braid (hsz : MlkemSizes) (s : States) (σ : BState) (st : S
 /-- `receive_chunked`, the one-sided receive obligation of the transfer: for a reachable code
 state related to a secure-messaging state, and related messages with epoch headroom, the code's
 receive and secure-messaging's receive are related by `RecvRel RA`. It uses the
-`BridgeObligations` fields `recv_complete`, `recv_key_length` and `mlkem_sizes`. -/
+`BridgeObligations` fields `recv_complete` and `mlkem_sizes`, and the theorem
+`codeRecv_key_length`. -/
 theorem receive_chunked (hB : BridgeObligations) (s : States) (n : ℕ) (st : SMState)
     (msg : Message) (msg' : SPQR.Chunked.Message L2.Sym) (hreach : ReachParty s n)
     (hep : msg.epoch.val + 1 < 2 ^ 64) (hRA : RA s st) (hRM : RM msg msg') :

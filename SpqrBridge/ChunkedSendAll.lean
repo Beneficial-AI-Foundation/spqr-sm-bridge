@@ -51,7 +51,7 @@ theorem send_keysUnsampled_eq (ep : ℕ) (a : Auth) :
 
 /-- The `keysUnsampled` send arm (transition (1)): `Braid.send` on the 64-byte tape agrees with
 `Chunked.send` on the same tape. -/
-theorem keysUnsampled_agree (hB : BridgeObligations) (ep : ℕ) (a : Auth) (σ : BState)
+theorem keysUnsampled_agree (ep : ℕ) (a : Auth) (σ : BState)
     (hrel : ChunkedRel σ (.keysUnsampled ⟨ep, a⟩)) (h64 : ep < 2 ^ 64) (t : B 64) :
     SendAgree (Braid.send codePrims σ (t.1.take (seedLen σ))) (keysUnsampledOut ep a t) := by
   obtain ⟨hmk, hst⟩ := hrel
@@ -68,7 +68,7 @@ theorem keysUnsampled_agree (hB : BridgeObligations) (ep : ℕ) (a : Auth) (σ :
       fit 32 (Auth.macHdr codePrims a' e (fit 64 (codePrims.keyGen t.1).2.1).1))
     ((codePrims.keyGen t.1).2.1 ++ Auth.macHdr codePrims a' e (codePrims.keyGen t.1).2.1)
     (by simp only [pairForm, fit_of_length h2, fit_of_length hM])
-  obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 3 _ _ hdrCodec (by decide) _ _ henc
+  obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 3 _ _ hdrCodec (by decide) _ _ henc
   simp only [Braid.send, hnc]
   exact ⟨⟨hmk, rfl, rfl, (fit_of_length h1).symm, (fit_of_length h2).symm,
     (fit_of_length h3).symm, hrel'⟩, rfl, hc, rfl, rfl⟩
@@ -101,7 +101,7 @@ theorem msgOfBytes_take (r : Bytes) : msgOfBytes (r.take 32) = msgOfBytes r := b
 
 /-- The `headerReceived` send arm (transition (7)): `Braid.send` on the first 32 bytes of the tape
 agrees with `Chunked.send` on the tape. -/
-theorem headerReceived_agree (hB : BridgeObligations) (ep : ℕ) (a : Auth) (hdr : B 64)
+theorem headerReceived_agree (ep : ℕ) (a : Auth) (hdr : B 64)
     (dec : encoding.polynomial.PolyDecoder) (σ : BState)
     (hrel : ChunkedRel σ (.headerReceived ⟨ep, a, hdr⟩ dec)) (h64 : ep < 2 ^ 64) (t : B 64) :
     SendAgree (Braid.send codePrims σ (t.1.take (seedLen σ)))
@@ -123,7 +123,7 @@ theorem headerReceived_agree (hB : BridgeObligations) (ep : ℕ) (a : Auth) (hdr
   have henc := encRel_init (by decide) (by decide) (by decide) (bytesForm 30)
     (fit 960 (codePrims.encaps1 hdr.1 t.1).2.1) (codePrims.encaps1 hdr.1 t.1).2.1
     (fit_of_length h2)
-  obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 30 _ _ ct1Codec (by decide) _ _ henc
+  obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 30 _ _ ct1Codec (by decide) _ _ henc
   simp only [Braid.send, he1, hnc]
   refine ⟨⟨auth_update_macKey_length _ h64 _, rfl, ?_, rfl, (fit_of_length h1).symm,
     (fit_of_length h2).symm, hrel', rfl, hwf⟩, rfl, hc, ?_, rfl⟩
@@ -136,8 +136,8 @@ theorem headerReceived_agree (hB : BridgeObligations) (ep : ℕ) (a : Auth) (hdr
 headroom related to a secure-messaging state, the code's send with a fresh tape and
 `Chunked.send` are coupled on `SendRel RA RM`. In the two sampling states the coupling is the
 identity on the tape; elsewhere `Chunked.send` is pure and the code ignores its tape
-(`relTriple_sampleTape_pure`). It uses the `BridgeObligations` fields `send_total`,
-`send_refines_tape`, `send_key_length` and `next_chunk_wrap`. -/
+(`relTriple_sampleTape_pure`). It uses the `BridgeObligations` fields `send_total` and
+`send_refines_tape`, and the theorems `codeSend_key_length` and `next_chunk_wrap`. -/
 theorem send_chunked (hB : BridgeObligations) (sampleInitKey : ProbComp InitKey) (s : States)
     (n : ℕ) (st : SMState) (hreach : ReachParty s n) (hep : s.epochOf.val + 1 < 2 ^ 64)
     (hRA : RA s st) :
@@ -154,14 +154,14 @@ theorem send_chunked (hB : BridgeObligations) (sampleInitKey : ProbComp InitKey)
       subst h
       rw [pure_bind]
       exact relTriple_pure_pure (sendRel_of_braid hB s n σ hreach hσ hep t _
-        (keysUnsampled_agree hB ep a σ hrel h64 t))
+        (keysUnsampled_agree ep a σ hrel h64 t))
     · rw [send_headerReceived_eq ep a hdr dec, bind_assoc]
       refine relTriple_bind (relTriple_refl _) fun t t' (h : t = t') => ?_
       subst h
       rw [pure_bind]
       exact relTriple_pure_pure (sendRel_of_braid hB s n σ hreach hσ hep t _
-        (headerReceived_agree hB ep a hdr dec σ hrel h64 t))
-  · obtain ⟨res, hres, hagree⟩ := braid_send_pure hB σ st hrel (not_or.mp hs)
+        (headerReceived_agree ep a hdr dec σ hrel h64 t))
+  · obtain ⟨res, hres, hagree⟩ := braid_send_pure σ st hrel (not_or.mp hs)
     rw [hres, pure_bind]
     exact relTriple_sampleTape_pure (fun t => sendStep s t.1) _ _ fun t =>
       sendRel_of_braid hB s n σ hreach hσ hep t res (hagree _)

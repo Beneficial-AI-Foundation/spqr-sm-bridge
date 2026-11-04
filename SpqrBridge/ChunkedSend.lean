@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
 import SpqrBridge.ChunkedRecvAll
+import SpqrBridge.NextChunkWrap
 
 /-!
 # The send arms of `Braid` → `Chunked`
@@ -11,8 +12,8 @@ import SpqrBridge.ChunkedRecvAll
 `sendRel_of_braid` reduces the send obligation `SendRel RA RM` for one tape to a step of the
 abstract machine: `Braid.send` on the tape prefix that the code reads agrees with the result of
 `Chunked.send` (`SendAgree`). The code side follows from the `BridgeObligations` fields
-`send_total`, `send_refines_tape` and `send_key_length`. The encoder steps use
-`next_chunk_wrap`.
+`send_total` and `send_refines_tape`, and from the theorem `codeSend_key_length`. The encoder
+steps use the theorem `next_chunk_wrap`.
 -/
 
 namespace SpqrBridge
@@ -60,7 +61,7 @@ theorem sendRel_of_braid (hB : BridgeObligations) (s : States) (n : ℕ) (σ : B
     SendRel RA RM (sendStep s t.1) (some (res.outputKey, res.msg, res.sendingEpoch, res.state)) := by
   obtain ⟨out, hout⟩ := hB.send_total s n t.1 hreach hep (by rw [t.2])
   obtain ⟨hst, hmsg, hkey⟩ := hB.send_refines_tape s σ t.1 out hσ hout
-  have hlen := hB.send_key_length s t.1 out hout
+  have hlen := codeSend_key_length s t.1 out hout
   obtain ⟨hrel, he, hp, hk, hse⟩ := h
   rw [← hmsg] at he hp hse
   rw [← hkey] at hk
@@ -89,7 +90,7 @@ theorem sendRel_of_braid (hB : BridgeObligations) (s : States) (n : ℕ) (σ : B
 
 /-- One encoder step: the code's `next_chunk` emits the chunk of the secure-messaging encoder,
 and the encoders stay related. (From `next_chunk_wrap`.) -/
-theorem encStep (hB : BridgeObligations) {M : Type} (K : ℕ) (hK : 0 < K) (hKN : K ≤ 2 ^ 16)
+theorem encStep {M : Type} (K : ℕ) (hK : 0 < K) (hKN : K ≤ 2 ^ 16)
     (cd : L2.Codec M K) (hKadm : K = 3 ∨ K = 5 ∨ K = 30 ∨ K = 36)
     (enc : encoding.polynomial.PolyEncoder) (es : EncoderState M L2.Sym)
     (h : EncRel K hK hKN cd enc es) :
@@ -97,14 +98,14 @@ theorem encStep (hB : BridgeObligations) {M : Type} (K : ℕ) (hK : 0 < K) (hKN 
       EncRel K hK hKN cd enc' es.nextChunk.2 := by
   obtain ⟨hecp, hinv, hidx⟩ := h
   obtain ⟨c, enc', hnc, hc, hinv', hidx'⟩ :=
-    hB.next_chunk_wrap K hK hKN cd es.payload es.nextIndex enc hKadm hinv hidx
+    next_chunk_wrap K hK hKN cd es.payload es.nextIndex enc hKadm hinv hidx
   refine ⟨c, enc', pick_eq_of hnc fun _ h' => ok_inj h' hnc, ?_, hecp, hinv', hidx'⟩
   simp only [EncoderState.nextChunk, hecp]
   exact hc.symm
 
 /-- The send arms that do not sample: `Chunked.send` is a pure result, and `Braid.send` with any
 randomness agrees with it. -/
-theorem braid_send_pure (hB : BridgeObligations) (σ : BState) (st : SMState)
+theorem braid_send_pure (σ : BState) (st : SMState)
     (hrel : ChunkedRel σ st) (hs : ¬ (∃ c, st = .keysUnsampled c) ∧ ¬ ∃ c d, st = .headerReceived c d) :
     ∃ res, SPQR.Chunked.send codeParams codeAuth st = pure res ∧
       ∀ r, SendAgree (Braid.send codePrims σ r) res := by
@@ -117,21 +118,21 @@ theorem braid_send_pure (hB : BridgeObligations) (σ : BState) (st : SMState)
   · rcases σ with _ | ⟨e, a', dk, hdr', ek, enc⟩ | _ | _ | _ | _ | _ | _ | _ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, rfl, henc⟩ := hst
-    obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 3 _ _ hdrCodec (by decide) enc es henc
+    obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 3 _ _ hdrCodec (by decide) enc es henc
     refine ⟨_, rfl, fun r => ?_⟩
     simp only [Braid.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, rfl, hrel'⟩, rfl, hc, rfl, rfl⟩
   · rcases σ with _ | _ | ⟨e, a', dk, d, enc⟩ | _ | _ | _ | _ | _ | _ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, hwf, henc⟩ := hst
-    obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 36 _ _ ekCodec (by decide) enc es henc
+    obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 36 _ _ ekCodec (by decide) enc es henc
     refine ⟨_, rfl, fun r => ?_⟩
     simp only [Braid.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, hwf, hrel'⟩, rfl, hc, rfl, rfl⟩
   · rcases σ with _ | _ | _ | ⟨e, a', dk, ct1, enc⟩ | _ | _ | _ | _ | _ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, henc⟩ := hst
-    obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 36 _ _ ekCodec (by decide) enc es henc
+    obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 36 _ _ ekCodec (by decide) enc es henc
     refine ⟨_, rfl, fun r => ?_⟩
     simp only [Braid.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, hrel'⟩, rfl, hc, rfl, rfl⟩
@@ -147,14 +148,14 @@ theorem braid_send_pure (hB : BridgeObligations) (σ : BState) (st : SMState)
   · rcases σ with _ | _ | _ | _ | _ | _ | _ | ⟨e, a', hdr', es, ct1, enc, d⟩ | _ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, rfl, henc, rfl, hwf⟩ := hst
-    obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 30 _ _ ct1Codec (by decide) enc ecs henc
+    obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 30 _ _ ct1Codec (by decide) enc ecs henc
     refine ⟨_, rfl, fun r => ?_⟩
     simp only [Braid.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, rfl, hrel', rfl, hwf⟩, rfl, hc, rfl, rfl⟩
   · rcases σ with _ | _ | _ | _ | _ | _ | _ | _ | ⟨e, a', es, ct1, hdr', ek, enc⟩ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, henc⟩ := hst
-    obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 30 _ _ ct1Codec (by decide) enc ecs henc
+    obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 30 _ _ ct1Codec (by decide) enc ecs henc
     refine ⟨_, rfl, fun r => ?_⟩
     simp only [Braid.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, rfl, rfl, hrel'⟩, rfl, hc, rfl, rfl⟩
@@ -165,7 +166,7 @@ theorem braid_send_pure (hB : BridgeObligations) (σ : BState) (st : SMState)
   · rcases σ with _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | ⟨e, a', enc⟩ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, henc⟩ := hst
-    obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep hB 5 _ _ ct2Codec (by decide) enc es henc
+    obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 5 _ _ ct2Codec (by decide) enc es henc
     refine ⟨_, rfl, fun r => ?_⟩
     simp only [Braid.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, hrel'⟩, rfl, hc, rfl, rfl⟩

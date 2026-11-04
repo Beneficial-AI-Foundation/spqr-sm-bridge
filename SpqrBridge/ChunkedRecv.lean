@@ -4,14 +4,15 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
 import SpqrBridge.ChunkedFacts
+import SpqrBridge.KeyLength
 
 /-!
 # The receive arms of `Braid` → `Chunked`
 
 `recvRel_of_braid` reduces the one-sided receive obligation `RecvRel RA` to a step of the
 abstract machine: when `Chunked.recv` accepts, `Braid.receive` accepts with a related state and
-the same key. The code side then follows from the `BridgeObligations` fields `recv_complete` and
-`recv_key_length`.
+the same key. The code side then follows from the `BridgeObligations` field `recv_complete` and
+the theorem `codeRecv_key_length`.
 
 Each `recv_*` theorem proves that machine step for one arm of `Chunked.recv`.
 -/
@@ -40,7 +41,7 @@ theorem recvRel_of_braid (hB : BridgeObligations) (s : States) (n : ℕ) (σ : B
   · rename_i r hr
     obtain ⟨σ', hrecv, hrel, hepr⟩ := h r hr
     obtain ⟨out, hout, hσ', hkey⟩ := hB.recv_complete s n σ σ' msg _ hreach hσ hep hrecv
-    have hlen := hB.recv_key_length s msg out hout
+    have hlen := codeRecv_key_length s msg out hout
     simp only [recvStep, hout, Option.bind_eq_bind, Option.bind_some]
     rcases hk : out.key with _ | es
     · rw [hk] at hkey

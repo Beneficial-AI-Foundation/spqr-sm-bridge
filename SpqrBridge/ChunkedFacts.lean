@@ -155,26 +155,6 @@ theorem codePrims_kdfAuth_length (rk k : Bytes) {n : ℕ} (h : n < 2 ^ 64) :
   show (pick (β := Bytes) _).length = 64
   rw [e, crypto.hkdf_length]
 
-/-- The MAC of a key and data of at most `u32::MAX` bytes has 32 bytes. -/
-theorem codePrims_mac_length (k d : Bytes) (hk : k.length ≤ U32.max) (hd : d.length ≤ U32.max) :
-    (codePrims.mac k d).length = 32 := by
-  have hmax := L2.usize_max_ge
-  have hu : U32.max = 2 ^ 32 - 1 := by simp [U32.max, U32.numBits, UScalarTy.numBits]
-  let ks : Slice Std.U8 := Slice.from k (by omega)
-  let ds : Slice Std.U8 := Slice.from d (by omega)
-  obtain ⟨tv, htv, -⟩ := WP.spec_imp_exists (libcrux_hmac.hmac_sha256_tag32_spec ks ds
-    (by simp only [ks, Slice.length, Slice.from_val]; exact hk)
-    (by simp only [ds, Slice.length, Slice.from_val]; exact hd))
-  obtain ⟨ks', ds', tv', hks, hds, htv', e⟩ := pick_spec (p := fun t => ∃ (ks ds : Slice Std.U8)
-    (tv : alloc.vec.Vec Std.U8), ks.val = k ∧ ds.val = d ∧
-      libcrux_hmac.hmac .Sha256 ks ds (some 32#usize) = ok tv ∧ t = tv.val)
-    ⟨_, ks, ds, tv, Slice.from_val .., Slice.from_val .., htv, rfl⟩
-  show (pick (β := Bytes) _).length = 32
-  rw [e]
-  have := WP.post_of_ok (libcrux_hmac.hmac_sha256_tag32_spec ks' ds'
-    (by simp only [Slice.length, hks]; exact hk) (by simp only [Slice.length, hds]; exact hd)) htv'
-  exact this
-
 /-- `Decaps` on inputs of 2400, 960 and 128 bytes returns 32 bytes. -/
 theorem codePrims_decaps_length (dk ct1 ct2 : Bytes) (h1 : dk.length = 2400)
     (h2 : ct1.length = 960) (h3 : ct2.length = 128) :
@@ -270,7 +250,7 @@ theorem macCt_length (a : Auth) {e : ℕ} (he : e < 2 ^ 64) (ct : Bytes)
     (Auth.macCt codePrims a e ct).length = 32 := by
   have hu : U32.max = 2 ^ 32 - 1 := by simp [U32.max, U32.numBits, UScalarTy.numBits]
   have ha : (ascii ":ciphertext").length = 11 := by simp only [ascii, List.length_map]; decide
-  apply codePrims_mac_length
+  apply mac_length_u32
   · rw [hk, hu]; omega
   · simp only [List.length_append, protocolInfo_length, ha, codePrims_toBytes_length he, hu]
     omega
@@ -280,7 +260,7 @@ theorem macHdr_length (a : Auth) {e : ℕ} (he : e < 2 ^ 64) (hdr : Bytes)
     (Auth.macHdr codePrims a e hdr).length = 32 := by
   have hu : U32.max = 2 ^ 32 - 1 := by simp [U32.max, U32.numBits, UScalarTy.numBits]
   have ha : (ascii ":ekheader").length = 9 := by simp only [ascii, List.length_map]; decide
-  apply codePrims_mac_length
+  apply mac_length_u32
   · rw [hk, hu]; omega
   · simp only [List.length_append, protocolInfo_length, ha, codePrims_toBytes_length he, hu]
     omega
