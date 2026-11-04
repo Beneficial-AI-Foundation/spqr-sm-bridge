@@ -138,7 +138,31 @@ theorem codeGameInv_epochs (s : GameState States States (B 32) Message) (h : Cod
 `ReachParty`. It follows from `init_refines` and `run_refines`. (W2.) -/
 theorem reachParty_refines (hsz : MlkemSizes) (s : States) (n : ℕ) (h : ReachParty s n) :
     ∃ σ, Refines s σ := by
-  sorry
+  obtain ⟨P, hP⟩ := codeAgrees_exists
+  obtain ⟨sA, sB, mA, mB, hr, hs⟩ := h
+  suffices hAB : (∃ σ, Refines sA σ) ∧ ∃ σ, Refines sB σ by
+    rcases hs with rfl | rfl
+    exacts [hAB.1, hAB.2]
+  have hsend : ∀ (s : States) (tape : List Std.U8) (out : v1.chunked.states.Send),
+      codeSend s tape = some out → (∃ σ, Refines s σ) → ∃ σ, Refines out.state σ := by
+    rintro s tape out hout ⟨σ, hσ⟩
+    obtain ⟨rng', hs'⟩ := codeSend_some hout
+    obtain ⟨r, hr', -⟩ := send_refines P hP tapeRng tapeCrypto s σ hσ tape rng' out hs'
+    exact ⟨_, hr'⟩
+  have hrecv : ∀ (s : States) (msg : Message) (out : v1.chunked.states.Recv),
+      codeRecv s msg = some out → (∃ σ, Refines s σ) → ∃ σ, Refines out.state σ := by
+    rintro s msg out hout ⟨σ, hσ⟩
+    obtain ⟨σ', -, hσ'⟩ := recv_refines P hP hsz s σ hσ msg out (codeRecv_some hout)
+    exact ⟨σ', hσ'⟩
+  clear hs
+  induction hr with
+  | init k =>
+    exact ⟨⟨_, (init_refines P hP k.1).1 _ (init_a_eq k)⟩,
+      ⟨_, (init_refines P hP k.1).2 _ (init_b_eq k)⟩⟩
+  | sendA tape out _ hout ih => exact ⟨hsend _ tape out hout ih.1, ih.2⟩
+  | sendB tape out _ hout ih => exact ⟨ih.1, hsend _ tape out hout ih.2⟩
+  | recvA m out _ _ hout ih => exact ⟨hrecv _ m out hout ih.1, ih.2⟩
+  | recvB m out _ _ hout ih => exact ⟨ih.1, hrecv _ m out hout ih.2⟩
 
 /-- A stale message leaves the state unchanged and outputs no key. This is the stale half of
 the split that `recv_complete` needs: #785 bounds the state epoch, the bridge bounds the
@@ -159,7 +183,13 @@ theorem polyStreamDecoder_addChunk_code {M : Type} (K : ℕ) (hK : 0 < K) (hKN :
         (L2.toChunk ((L2.ecp K hK hKN cd).encode p i).1 ((L2.ecp K hK hKN cd).encode p i).2) =
           ok d' ∧
       (L2.polyStreamDecoder K hKN cd).addChunk d ((L2.ecp K hK hKN cd).encode p i) = d' := by
-  sorry
+  have hidx : ((L2.ecp K hK hKN cd).encode p i).1 < 2 ^ 16 := by
+    simp only [ErasureCodePayload.encode, ErasureCodePayload.counterIndex, L2.ecp, L2.ec]
+    exact Nat.mod_lt _ (by norm_num)
+  obtain ⟨d', hd'⟩ := L2.add_chunk_ok (cd.ser p) d hd _ hidx ((L2.ecp K hK hKN cd).encode p i).2
+  refine ⟨d', hd', ?_⟩
+  simp only [L2.polyStreamDecoder, hd']
+  rfl
 
 /-- On an honest decoder state, the code's `decoded_message` succeeds, and the wrapper's
 `decodedPayload` is its parsed result. (W2, from `decoded_message_ok`.) -/
@@ -169,6 +199,9 @@ theorem polyStreamDecoder_decoded_code {M : Type} (K : ℕ) (hKN : K ≤ 2 ^ 16)
     ∃ r, encoding.polynomial.PolyDecoder.Insts.SpqrEncodingDecoder.decoded_message d = ok r ∧
       (L2.polyStreamDecoder K hKN cd).decodedPayload d =
         r.bind fun v => cd.parse (L2.unflatten K v.val) := by
-  sorry
+  obtain ⟨r, hr⟩ := L2.decoded_message_ok hKN (cd.ser p) d hd
+  refine ⟨r, hr, ?_⟩
+  simp only [L2.polyStreamDecoder, hr]
+  rcases r with _ | v <;> rfl
 
 end SpqrBridge
