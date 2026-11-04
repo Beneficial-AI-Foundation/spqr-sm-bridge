@@ -1,0 +1,363 @@
+% How the SCKA correctness bound of secure-messaging transfers to the SPQR code.
+% Same style and colors as ref-impl-simulation/slides/methodology.
+% Build: latexmk -lualatex slides.tex
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usepackage{fontspec}
+\setsansfont{DejaVu Sans}
+\directlua{
+  luaotfload.add_fallback("leanfallback", {"NotoSansMath:mode=harf;", "STIX Two Math:mode=harf;"})
+}
+\setmonofont{DejaVu Sans Mono}[Scale=0.9, RawFeature={fallback=leanfallback}]
+
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, calc, fit, backgrounds, shapes.misc, decorations.pathreplacing}
+
+% Colors. Spec side, impl side, proof, trusted, gap.
+\definecolor{refc}{HTML}{2B6CB0}
+\definecolor{realc}{HTML}{C05621}
+\definecolor{proofc}{HTML}{2F855A}
+\definecolor{trustc}{HTML}{718096}
+\definecolor{gapc}{HTML}{C53030}
+\definecolor{ink}{HTML}{1A202C}
+\definecolor{paper}{HTML}{FFFFFF}
+
+\setbeamercolor{normal text}{fg=ink, bg=paper}
+\setbeamercolor{frametitle}{fg=ink}
+\setbeamercolor{title}{fg=ink}
+\setbeamercolor{structure}{fg=refc}
+\setbeamerfont{frametitle}{size=\Large, series=\bfseries}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{%
+  \hfill\textcolor{trustc}{\scriptsize\insertframenumber/\inserttotalframenumber}\hspace{1.2em}\vspace{0.8em}}
+
+\tikzset{
+  >={Stealth[length=2.4mm]},
+  box/.style={draw, rounded corners=3pt, thick, align=center, inner sep=5pt, font=\small},
+  spec/.style={box, draw=refc, fill=refc!8},
+  impl/.style={box, draw=realc, fill=realc!8},
+  proof/.style={box, draw=proofc, fill=proofc!10},
+  trust/.style={box, draw=trustc, fill=trustc!10},
+  gap/.style={box, draw=gapc, fill=gapc!6, dashed},
+  tool/.style={box, draw=ink!60, fill=ink!4},
+  doc/.style={box, draw=ink!60, fill=paper, double, double distance=1pt},
+  flow/.style={->, thick, ink!70},
+  proved/.style={<->, very thick, proofc},
+  rel/.style={-, very thick, proofc, dashed},
+  label/.style={font=\scriptsize, align=center},
+}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\specside}[1]{\textcolor{refc}{#1}}
+\newcommand{\implside}[1]{\textcolor{realc}{#1}}
+
+\title{From a model bound to the code}
+\subtitle{\vspace{0.8em}Transferring secure-messaging's SCKA correctness bound to the extracted SPQR code}
+\author{SpqrBridge}
+\date{November 2026}
+
+\begin{document}
+
+% ---------------------------------------------------------------- 1
+\begin{frame}
+  \titlepage
+  \centering
+  \begin{tikzpicture}[scale=0.85, transform shape, every node/.append style={font=\scriptsize}]
+    \node[impl] (c) {\textbf{code}\\extracted \code{States}};
+    \node[spec, right=0.9cm of c] (b) {\textbf{\code{Braid}}\\abstract machine};
+    \node[spec, right=0.9cm of b] (k) {\textbf{\code{SPQR.Chunked}}\\SM model};
+    \node[proof, right=0.9cm of k] (q) {$\Pr[\text{fail}] \le q\varepsilon$\\if four open facts hold};
+    \draw[rel] (c) -- node[above, label, text=proofc] {refines} (b);
+    \draw[rel] (b) -- node[above, label, text=proofc] {related} (k);
+    \draw[flow, proofc] (k) -- node[above, label, text=proofc] {SM proof} (q);
+  \end{tikzpicture}
+\end{frame}
+
+% ---------------------------------------------------------------- 2
+\begin{frame}[t]{Two proofs about SPQR, one gap}
+  \vspace{2.2em}
+  \centering
+  \begin{tikzpicture}[scale=0.85, transform shape, every node/.append style={font=\scriptsize}]
+    \node[impl, text width=5.4cm] (rust) at (0, 2) {Rust code (SparsePostQuantumRatchet)};
+    \node[impl, text width=5.4cm] (lean) at (0, 0.6) {Lean code (Aeneas extraction)};
+    \node[spec, text width=5.4cm] (braid) at (0, -1.0) {\code{Braid}: ML-KEM Braid,\\with the code's deviations};
+    \draw[flow] (rust) -- node[right, label] {Aeneas} (lean);
+    \draw[rel] (lean) -- node[right, label, text=proofc] {refinement, per step} (braid);
+
+    \node[spec, text width=5.4cm] (chunked) at (10.5, 0.6) {\code{SPQR.Chunked}: SM model of the code};
+    \node[proof, text width=5.4cm] (bound) at (10.5, -1.0) {correctness bound $1 - \Pr[\text{ok}] \le q\varepsilon$};
+    \draw[flow, proofc] (chunked) -- node[right, label, text=proofc] {SM proof} (bound);
+
+    \node[gap, text width=2.4cm] (g) at (5.25, -2.2) {no link between the two};
+    \draw[gapc, dashed, thick] (braid.south) |- (g.west);
+    \draw[gapc, dashed, thick] (g.east) -| (bound.south);
+
+    \node[label, text=trustc] at (0, 2.9) {SparsePostQuantumRatchet-verify};
+    \node[label, text=trustc] at (10.5, 1.5) {secure-messaging (SM)};
+  \end{tikzpicture}
+\end{frame}
+
+% ---------------------------------------------------------------- 3
+\begin{frame}[t,fragile]{The result}
+  \vspace{0.2em}
+  Assume the four facts about the code in \code{BridgeObligations}, which are not proved yet. Let
+  \code{adv} make at most $q$ send queries, with $q + 2 < 2^{64}$.\\[0.3em]
+  Then the probability that the correctness game fails on the code is at most $q\varepsilon$.
+  \vspace{0.2em}
+{\scriptsize
+\begin{verbatim}
+theorem code_correctness_error_le (hB : BridgeObligations)
+    (sampleInitKey : ProbComp InitKey)
+    (adv : SCKACorrectnessAdversary Message) (q : ℕ)
+    (hq : SendQueryBound adv q) (hq64 : q + 2 < 2 ^ 64) :
+    1 - Pr{let x ← correctnessExp (codeScheme sampleInitKey) adv}
+          [x = true] ≤
+      (q : ℝ≥0∞) * codeKem.correctnessError ProbCompRuntime.probComp
+\end{verbatim}}
+  \begin{itemize}\footnotesize
+    \item \code{codeScheme}: the code as an SCKA scheme. Each send draws 64 uniform random bytes,
+      independent of earlier sends, and the code reads at most 64 of them.
+    \item $\varepsilon$: the correctness error of \code{codeKem}, the KEM of the code's ML-KEM models.
+    \item \code{BridgeObligations}: four facts about the code, owned by open issues of
+      SparsePostQuantumRatchet-verify (\#785, \#786, \#787). The result is conditional on them.
+    \item No \code{sorry}. Axioms beyond Lean's three: HKDF, HMAC, one libcrux workaround.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------- 4
+\begin{frame}[t]{The chain of relations}
+  \vspace{0.9em}
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+    \node[impl, minimum width=2.6cm] (s) at (0, 0) {code state $s$};
+    \node[spec, minimum width=2.6cm] (sg) at (5, 0) {\code{Braid} state $\sigma$};
+    \node[spec, minimum width=2.6cm] (st) at (10, 0) {\code{Chunked} state $t$};
+    \draw[rel] (s) -- node[above, label, text=proofc] {\code{Refines}\\from PR \#781} (sg);
+    \draw[rel] (sg) -- node[above, label, text=proofc] {\code{ChunkedRel}\\this repository} (st);
+    \draw[decorate, decoration={brace, mirror, amplitude=6pt}, proofc, thick]
+      (s.south west) ++(0,-0.2) -- ($(st.south east)+(0,-0.2)$)
+      node[midway, below=8pt, label, text=proofc] {state relation: $RA\;s\;t \iff \exists \sigma,\ \code{Refines}\ s\ \sigma \wedge \code{ChunkedRel}\ \sigma\ t$};
+  \end{tikzpicture}
+  \vspace{1.2em}
+
+  \begin{itemize}\footnotesize
+    \item $RA$: a code state and an SM state are related through \code{Braid}. The code state
+      refines some \code{Braid} state $\sigma$ (PR \#781), and $\sigma$ is related to the SM state
+      (\code{ChunkedRel}). Both parties use it.
+    \item \code{ChunkedRel}: the same of the eleven states, equal epochs and authenticators, byte
+      fields as typed values, equal decoders, and each code encoder's \code{u32} counter is SM's counter modulo $2^{32}$. The header that
+      \code{Refines} leaves free is taken from the SM state.
+    \item $RM$: \code{Braid}'s message map \code{absMsg}, followed by the chunk map
+      $c \mapsto (c.\code{index}, c.\code{data})$ into SM.
+    \item \code{send\_chunked} and \code{receive\_chunked} cover every arm of both machines.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------- 5
+\begin{frame}[t]{Where the models differ: the erasure decoders}
+  \vspace{2.0em}
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+    \node[spec, text width=4.2cm] (sm) at (0, 0) {\textbf{SM decoder}\\a set of chunks,\\decoded as a set};
+    \node[impl, text width=6cm] (rs) at (8, 0) {\textbf{Rust decoder}\\skips points as they arrive,\\so its state depends on the order};
+    \node[gap, text width=2.2cm] (g) at (3.6, 0) {different\\interfaces};
+    \draw[gapc, dashed, thick] (sm) -- (g) -- (rs);
+  \end{tikzpicture}
+  \vspace{1.6em}
+
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+    \node[proof, text width=12.5cm, align=flush left, font=\scriptsize] {%
+      \textbf{The change, in SM:} make the machines generic in a \code{StreamDecoder}
+      (\code{empty}, \code{addChunk}, \code{decodedPayload}, \code{Honest}).\\[2pt]
+      The proofs need two laws only:
+      \begin{itemize}
+        \item the empty decoder is honest for every payload;
+        \item adding a chunk of $p$ to a decoder honest for $p$ keeps it honest, and it then decodes
+          nothing or $p$ (\code{Lawful}).
+      \end{itemize}
+      SM's set decoder is an instance. The generic theorems take the law as a premise, and the
+      concrete v1 bound keeps its statement.};
+  \end{tikzpicture}
+\end{frame}
+
+% ---------------------------------------------------------------- 6
+\begin{frame}[t]{The Rust decoder is lawful}
+  \vspace{0.9em}
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+    \draw[->, ink!50] (0,0) -- (6,0) node[right] {$x$};
+    \draw[->, ink!50] (0,0) -- (0,2.4) node[above] {$y$};
+    \draw[thick, refc, domain=0.2:5.8, samples=60] plot (\x, {1.1 + 0.6*sin(\x*65)});
+    \foreach \x in {0.8, 1.9, 3.1, 4.6} {
+      \fill[realc] (\x, {1.1 + 0.6*sin(\x*65)}) circle (2.2pt);
+    }
+    \node[label, text=refc, anchor=west] at (6.2, 1.6) {codeword polynomial of $p$};
+    \node[label, text=realc, anchor=west] at (6.2, 0.8) {stored points};
+  \end{tikzpicture}
+  \vspace{0.6em}
+
+  \begin{itemize}\footnotesize
+    \item Honest state: every stored point lies on the slot polynomial of the payload $p$.
+    \item An honest chunk adds a point of the same polynomial, or is skipped.
+    \item Any $K$ points with distinct $x$ determine the polynomial, so a decoded value is $p$.
+    \item \code{polyStreamDecoder\_lawful}: one theorem for the four streams, $K \in \{3, 36, 30, 5\}$.
+    \item The order of arrival does not matter for this law.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------- 7
+\begin{frame}[t]{Moving the bound to the code}
+  \vspace{0.3em}
+  \begin{itemize}\footnotesize
+    \item SM's bound comes from one lemma, \code{correctness\_error\_le\_of\_potential}, over a
+      function $V_2$ on its game states (its ``potential'').
+    \item The bridge reuses SM's invariant $\mathit{Inv}_2$ and one-step bounds for the code's game,
+      with a $V_1$ built from $V_2$. Here $s_1 \sim s_2$ relates a state of the code's game to a
+      state of SM's game: party states by $RA$, recorded messages by $RM$, and equal key tables,
+      counters and flag.
+  \end{itemize}
+  \vspace{0.1em}
+  \[
+    V_1(s_1) =
+    \begin{cases}
+      1 & \text{if } s_1 \text{ has failed} \\
+      \min\bigl(1,\ \inf\{\, V_2(s_2) \mid s_1 \sim s_2,\ \mathit{Inv}_2\ s_2 \,\}\bigr) & \text{otherwise}
+    \end{cases}
+  \]
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+    \node[impl, minimum width=1.4cm] (a) at (0, 0.6) {$s_1$};
+    \node[impl, minimum width=1.4cm] (a') at (5, 0.6) {$s_1'$};
+    \node[spec, minimum width=1.4cm] (b) at (0, -0.5) {$s_2$};
+    \node[spec, minimum width=1.4cm] (b') at (5, -0.5) {$s_2'$};
+    \draw[flow, realc] (a) -- node[above, label, text=realc] {query to the code} (a');
+    \draw[flow, refc] (b) -- node[below, label, text=refc] {same query to SM} (b');
+    \draw[rel] (a) -- node[right, label, text=proofc] {$\sim$} (b);
+    \node[label, text=realc, anchor=east] at (-1.2, 0.6) {code's game\\(\code{codeScheme})};
+    \node[label, text=refc, anchor=east] at (-1.2, -0.5) {SM's game\\(\code{SPQR.Chunked})};
+    \draw[rel] (a') -- node[right, label, text=proofc] {$\sim$, or SM has failed} (b');
+  \end{tikzpicture}
+  \vspace{0.2em}
+
+  \begin{itemize}\footnotesize
+    \item The step obligations (slide 9) keep the states related, so $V_1$ inherits SM's bound. The
+      induction counts the remaining sends (\code{correctness\_error\_le\_of\_budgeted\_transfer}).
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------- 9
+\begin{frame}[t]{Why 64-bit epochs never overflow}
+  \vspace{0.3em}
+  \footnotesize
+  An adversary with fewer than $2^{64} - 2$ sends cannot push an epoch to the overflow point.
+  \vspace{3.2em}
+
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+    \node[impl, text width=3.6cm] (c) at (0,0) {\textbf{code}: epochs are \code{u64},\\\code{recv} fails past $2^{64} - 1$};
+    \node[spec, text width=3.6cm] (m) at (7,0) {\textbf{SM model}: epochs are $\mathbb{N}$,\\never fails there};
+    \node[gap, text width=2.2cm] (g) at (3.5,0) {differ only\\at the limit};
+    \draw[gapc, dashed, thick] (c) -- (g) -- (m);
+  \end{tikzpicture}
+  \vspace{0.8em}
+
+  \raggedright
+  \begin{enumerate}\footnotesize
+    \item At the limit the two machines differ, so they cannot be related there.
+    \item Every epoch is at most the number of successful sends plus one
+      (\code{codeGameInv\_epochs}).
+    \item So the step obligations are needed only below a cap $B = 2^{64} - 2$ on the sends: fewer
+      than $B$ for a send, at most $B$ for a receive, since deliveries go on after the last send.
+      With $q + 2 < 2^{64}$, the adversary's $q$ sends stay below $B$.
+  \end{enumerate}
+\end{frame}
+
+% ---------------------------------------------------------------- 10
+\begin{frame}[t]{The step obligations}
+  \vspace{0.9em}
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize},
+      key/.style={proof, text width=1.4cm, minimum height=0.9cm},
+      what/.style={box, draw=proofc!60, fill=paper, text width=10.6cm, minimum height=0.9cm,
+        align=left, execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000}}]
+    \node[key] (i) at (0, 0) {\textbf{init}};
+    \node[what, right=0.2cm of i] {Every pair of initial states that the code can start in is
+      related to a pair that SM can start in.};
+    \node[key, below=0.25cm of i] (s) {\textbf{send}};
+    \node[what, right=0.2cm of s] {Both machines read the same 64 random bytes. For every value
+      of those bytes, their results are related.};
+    \node[key, below=0.25cm of s] (r) {\textbf{recv}};
+    \node[what, right=0.2cm of r] {If SM accepts a recorded message, the code accepts it too,
+      with related results. If SM refuses, nothing is required.};
+  \end{tikzpicture}
+  \vspace{0.8em}
+
+  \begin{itemize}\footnotesize
+    \item Two sends read random bytes: key generation (64 bytes) and encapsulation (32 bytes). For
+      these, \code{codeParams} builds SM's operations from the code's own primitives, so both read
+      the same bytes.
+    \item The other sends read none. The code ignores its bytes, and both results are fixed and
+      related.
+    \item Why nothing is required when SM refuses: SM's game has failed already, and the bound
+      counts that failure.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------- 11
+\begin{frame}{What the theorem trusts}
+  \centering
+  \begin{tikzpicture}[
+      layer/.style={box, minimum width=8.2cm, minimum height=0.6cm, font=\scriptsize},
+      why/.style={label, text=trustc, anchor=west, align=left}]
+    \node[proof, layer] (thm) at (0, 0) {the theorem, checked by the Lean kernel};
+    \node[gap, layer, below=0.12cm of thm] (l1) {premises: \code{BridgeObligations}, four fields};
+    \node[trust, layer, below=0.12cm of l1] (l2) {axioms: HKDF, HMAC, libcrux workaround};
+    \node[trust, layer, below=0.12cm of l2] (l3) {models: FIPS 203 for libcrux, SM's game and KEM};
+    \node[trust, layer, below=0.12cm of l3] (l4) {the extraction: hand rename for the Aeneas bump};
+    \node[tool, layer, below=0.12cm of l4] (l5) {tools: Charon, Aeneas and its library, VCVio, Lean};
+    \foreach \n/\t in {l1/{\#785, \#786, \#787}, l2/{\code{\#print axioms}}, l3/review, l4/{re-extract}, l5/tools} {
+      \node[why] at ([xshift=0.25cm]\n.east) {\t};
+    }
+  \end{tikzpicture}
+  \vspace{0.6em}
+
+  \begin{itemize}\footnotesize
+    \item $\varepsilon$ is not yet ML-KEM's small error: the workaround in \code{encaps2} only
+      promises a 2080-byte state (\#788).
+    \item The bound covers the correctness game: delivery of unmodified recorded messages, with
+      adversarial order and replay. No injected messages, no liveness.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------- 12
+\begin{frame}{Status and next steps}
+  \centering
+  \scriptsize
+  \renewcommand{\arraystretch}{1.35}
+  \begin{tabular}{l l l}
+    \textbf{piece} & \textbf{where} & \textbf{status} \\
+    \hline
+    code refines \code{Braid} & spqr-verify, PR \#781 & proved, one direction \\
+    generic stream decoders & SM, \code{la/generic-decoder} & proved, to propose \\
+    \code{Braid} related to \code{SPQR.Chunked} & this repository & proved, every arm \\
+    Rust decoder is lawful & this repository & proved \\
+    transfer of the bound & this repository & proved, for $q + 2 < 2^{64}$ \\
+    send, recv, tape facts & spqr-verify, \#785, \#787 & open: premises \\
+    $\varepsilon$ is ML-KEM's error & \#788, then a model link & open \\
+  \end{tabular}\\[0.4em]
+  {\tiny spqr-verify: SparsePostQuantumRatchet-verify. SM: secure-messaging.}
+  \vspace{1.2em}
+
+  \normalsize
+  \begin{tikzpicture}
+    \node[proof, text width=10cm, align=flush left, font=\footnotesize]
+      {\textbf{Next}
+       \begin{itemize}
+         \item Propose the generic stream decoder to secure-messaging.
+         \item Close \#785, \#786 and \#787: each removes a premise.
+         \item \#788, so that $\varepsilon$ can be identified with ML-KEM-768's error.
+       \end{itemize}};
+  \end{tikzpicture}
+\end{frame}
+
+\end{document}
