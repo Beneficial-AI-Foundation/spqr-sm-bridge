@@ -89,8 +89,7 @@ theorem decaps_ok_length (dk ct1 ct2 ss : alloc.vec.Vec Std.U8)
   rfl
 
 /-- On inputs of at most `u32::MAX` bytes, the MAC has 32 bytes. This is the bound of the HMAC
-axiom `hmac_sha256_tag32_spec`; the contract `mac_length` states `usize::MAX`, which no axiom
-covers. -/
+axiom `hmac_sha256_tag32_spec`. -/
 theorem mac_length_u32 (k d : Bytes) (hk : k.length ≤ Std.U32.max) (hd : d.length ≤ Std.U32.max) :
     (codePrims.mac k d).length = 32 := by
   have hu : Std.U32.max ≤ Std.Usize.max := by scalar_tac

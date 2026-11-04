@@ -87,7 +87,11 @@ instance : Nonempty encoding.polynomial.PolyDecoder :=
 instance : Nonempty encoding.Chunk := ⟨⟨0#u16, Array.repeat 32#usize 0#u8⟩⟩
 
 /-- The fixed primitive instance. It is `codeAgrees_exists`'s construction, except that key
-generation and `Encaps1` are the seeded FIPS 203 models. -/
+generation and `Encaps1` are the seeded FIPS 203 models.
+
+`pick`, the `Nonempty` instances above and this construction are adapted from
+`Spqr/Specs/Braid/StateMachine/Refinement.lean` of SparsePostQuantumRatchet-verify (Apache-2.0,
+by Lacramioara Astefanoaei). -/
 noncomputable def codePrims : CodePrims where
   encode msg := pick fun e => ∃ s : Slice Std.U8, s.val = msg ∧
     encoding.polynomial.PolyEncoder.Insts.SpqrEncodingEncoder.encode_bytes s = ok (.Ok e)

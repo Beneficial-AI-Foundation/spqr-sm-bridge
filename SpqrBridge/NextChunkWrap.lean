@@ -12,8 +12,8 @@ import SpqrBridge.Adapter
 `next_chunk_eq_encode` covers counters below `2^16` and says the stored counter grows by one.
 Here the counter is any `u32`. `next_chunk` emits index `idx as u16`, that is `idx % 2^16`,
 with the chunk of that index, and stores `idx.wrapping_add(1)`, that is `(idx + 1) % 2^32`.
-`next_chunk_inv_wrap` states this for the encoder, and `next_chunk_wrap` proves the
-`next_chunk_wrap` field of `BridgeObligations`. The proof calls `chunk_at_spec` with the
+`next_chunk_inv_wrap` states this for the encoder, and `next_chunk_wrap` states it for the chunks
+of an erasure-coded payload. The proof calls `chunk_at_spec` with the
 truncated index, so it does not need the `idx ≤ u16::MAX` premise of `next_chunk_spec`.
 -/
 

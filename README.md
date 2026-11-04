@@ -2,10 +2,11 @@
 
 A Lean 4 proof that transfers the SCKA correctness bound of
 [secure-messaging](https://github.com/Beneficial-AI-Foundation/secure-messaging) from its model of
-SPQR to the Rust code of
-[SparsePostQuantumRatchet](https://github.com/signalapp/SparsePostQuantumRatchet) (Signal v1.6.0).
-The code is the Aeneas extraction verified in
+SPQR to the chunked `States` machine of
+[SparsePostQuantumRatchet](https://github.com/signalapp/SparsePostQuantumRatchet) v1.6.0, presented
+as an SCKA scheme by an adapter. The machine is the Aeneas extraction verified in
 [SparsePostQuantumRatchet-verify](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify).
+The result does not cover the rest of the library, such as serialization or the public API.
 
 This is a proof of concept. The theorem is conditional on four facts about the code that are not
 proved yet, listed below.
@@ -32,7 +33,8 @@ theorem code_correctness_error_le (hB : BridgeObligations) (sampleInitKey : Prob
 ```
 
 The correctness experiment is Def. 3.1 of [ADJKS25]: monotonic, matching and unique epochs,
-consistent keys, and a known prefix, under honest delivery of recorded messages.
+consistent keys, and a known prefix. The adversary delivers unmodified recorded messages, in any
+order and with replay. It does not inject messages.
 
 ## Method
 
@@ -46,10 +48,13 @@ The proof composes three relations:
    secure-messaging state are related when some `Braid` state lies between them (`RA`). Messages
    are related by `Braid`'s message map followed by the chunk map (`RM`).
 3. **The bound.** secure-messaging proves `SPQR.correctness_error_le` with one lemma,
-   `correctness_error_le_of_potential`, over a function on its game states (its potential). This
-   repository applies the same lemma to the code's game. The code-side function is the infimum of
-   the secure-messaging one over related states, capped at 1
-   (`correctness_error_le_of_budgeted_transfer`). The step obligations keep the states related. The
+   `correctness_error_le_of_potential`, over an invariant and a function on its game states (its
+   potential). This repository reuses that invariant and its one-step bounds for the code's game
+   (`correctness_error_le_of_budgeted_transfer`). The code-side function is the infimum of the
+   secure-messaging one over the related game states that satisfy the invariant, capped at 1. Two
+   game states are related when both party states are related by `RA`, the recorded messages by
+   `RM`, and the key tables, counters and flag are equal. The step obligations keep the game states
+   related. The
    code's epochs are `u64`, but an epoch never exceeds the number of sends plus one. So the
    obligations are needed only in runs with fewer than `2^64 - 2` sends, and the code never
    overflows there.
@@ -59,7 +64,8 @@ Two facts make the second relation possible:
 - **Generic stream decoders.** The Rust erasure decoder skips points as they arrive, so its
   state depends on the arrival order. The secure-messaging branch below makes `MLKEMBraid` and
   `SPQR.Chunked` generic in their stream decoder, with one safety law, `StreamDecoder.Lawful`.
-  Its own set-based decoder is an instance, so its theorems keep their statements.
+  Its own set-based decoder is an instance. The generic theorems take the law as a premise in
+  place of erasure-code correctness, and the concrete v1 bound keeps its statement.
 - **The Rust decoder is lawful.** `polyStreamDecoder_lawful`: from an honest state, adding an
   honest chunk keeps the state honest, and the decoder returns nothing or the payload.
 
@@ -70,10 +76,12 @@ SparsePostQuantumRatchet-verify:
 
 | Field | Statement | Issue |
 |---|---|---|
-| `mlkem_sizes` | the ML-KEM-768 sizes that libcrux reports | #786 |
-| `send_total` | `send` succeeds on reachable states below the epoch limit | #785 |
-| `recv_complete` | `recv` succeeds where `Braid` accepts | #785 |
-| `send_refines_tape` | `Braid`'s randomness is the tape prefix that the code read | #787 |
+| `mlkem_sizes` | libcrux reports the ML-KEM-768 sizes 960 (`ct1`), 128 (`ct2`) and 1152 (encapsulation key) | [#786](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/786) |
+| `send_total` | on a reachable state whose epoch plus one fits in a `u64`, `send` with at least 64 bytes of randomness succeeds | [#785](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/785) |
+| `recv_complete` | on a reachable state that refines a `Braid` state, where `Braid` accepts a message whose epoch plus one fits in a `u64`, `recv` succeeds with a state that refines `Braid`'s next state and with the same key | [#785](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/785) |
+| `send_refines_tape` | a successful `send` takes the `Braid` step whose randomness is the prefix of the bytes that the code read: the next states are related, and the message and key are the same | [#787](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/787) |
+
+The exact statements are the fields of `BridgeObligations` in `SpqrBridge/CodeBound.lean`.
 
 Beyond Lean's three axioms, `#print axioms code_correctness_error_le` lists three axioms of the
 trusted base of SparsePostQuantumRatchet-verify: `spqr.kdf.hkdf_to_slice_spec`,
@@ -83,8 +91,9 @@ trusted base of SparsePostQuantumRatchet-verify: `spqr.kdf.hkdf_to_slice_spec`,
 ## Limits
 
 - The theorem is conditional on the four fields above.
-- `ε` is not yet identified with the correctness error of ML-KEM-768. The code's `encaps2` first
-  calls an opaque workaround whose axiom only fixes the length of its result (issue #788).
+- `ε` is not yet identified with the correctness error of ML-KEM-768, so the result gives no
+  numerical bound. The code's `encaps2` first calls an opaque workaround whose axiom only fixes
+  the length of its result ([#788](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/788)).
 - It covers the correctness game only: no injected messages, no liveness, no state rollback.
 - The SparsePostQuantumRatchet-verify branch moves to Aeneas `nightly-2026.11.03-ab34bd2` by
   renaming one identifier in the extracted files by hand, without a new extraction.
@@ -97,8 +106,11 @@ trusted base of SparsePostQuantumRatchet-verify: `spqr.kdf.hkdf_to_slice_spec`,
 | `SecureMessaging` | secure-messaging | `la/generic-decoder` | `c16e287` |
 
 `lakefile.toml` pins both commits. Both packages use Lean `v4.35.0` and Mathlib `56a00585`. The
-first build compiles both dependencies and takes a while; `lake exe cache get` fetches Mathlib
+first build compiles both dependencies and takes a while. `lake exe cache get` fetches Mathlib
 only.
+
+Install Lean through [elan](https://github.com/leanprover/elan), which reads `lean-toolchain`.
+Then, from the repository root:
 
 ```bash
 lake exe cache get
@@ -120,6 +132,7 @@ lake build
 ## References
 
 - [MLKEMBraid] Signal. *The ML-KEM Braid Protocol*, Revision 1.
+  https://signal.org/docs/specifications/mlkembraid/
 - [ADJKS25] Auerbach, Dodis, Jost, Katsumata, Schmidt. *How to Compare Bandwidth Constrained
   Two-Party Secure Messaging Protocols: A Quest for A More Efficient and Secure Post-Quantum
   Protocol.* USENIX Security 2025, https://eprint.iacr.org/2025/2267.pdf

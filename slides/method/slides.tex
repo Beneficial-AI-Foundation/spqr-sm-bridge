@@ -64,9 +64,9 @@
   \centering
   \begin{tikzpicture}[scale=0.85, transform shape, every node/.append style={font=\scriptsize}]
     \node[impl] (c) {\textbf{code}\\extracted \code{States}};
-    \node[spec, right=1.1cm of c] (b) {\textbf{\code{Braid}}\\abstract machine};
-    \node[spec, right=1.1cm of b] (k) {\textbf{\code{SPQR.Chunked}}\\SM model};
-    \node[proof, right=1.1cm of k] (q) {$\Pr[\text{fail}] \le q\varepsilon$};
+    \node[spec, right=0.9cm of c] (b) {\textbf{\code{Braid}}\\abstract machine};
+    \node[spec, right=0.9cm of b] (k) {\textbf{\code{SPQR.Chunked}}\\SM model};
+    \node[proof, right=0.9cm of k] (q) {$\Pr[\text{fail}] \le q\varepsilon$\\if four open facts hold};
     \draw[rel] (c) -- node[above, label, text=proofc] {refines} (b);
     \draw[rel] (b) -- node[above, label, text=proofc] {related} (k);
     \draw[flow, proofc] (k) -- node[above, label, text=proofc] {SM proof} (q);
@@ -99,11 +99,12 @@
 
 % ---------------------------------------------------------------- 3
 \begin{frame}[t,fragile]{The result}
-  \vspace{0.6em}
-  Let \code{adv} make at most $q$ send queries, with $q + 2 < 2^{64}$.\\[0.3em]
+  \vspace{0.2em}
+  Assume the four facts about the code in \code{BridgeObligations}, which are not proved yet. Let
+  \code{adv} make at most $q$ send queries, with $q + 2 < 2^{64}$.\\[0.3em]
   Then the probability that the correctness game fails on the code is at most $q\varepsilon$.
-  \vspace{0.6em}
-{\footnotesize
+  \vspace{0.2em}
+{\scriptsize
 \begin{verbatim}
 theorem code_correctness_error_le (hB : BridgeObligations)
     (sampleInitKey : ProbComp InitKey)
@@ -117,7 +118,8 @@ theorem code_correctness_error_le (hB : BridgeObligations)
     \item \code{codeScheme}: the code as an SCKA scheme. Each send draws 64 uniform random bytes,
       independent of earlier sends, and the code reads at most 64 of them.
     \item $\varepsilon$: the correctness error of \code{codeKem}, the KEM of the code's ML-KEM models.
-    \item \code{BridgeObligations}: four facts about the code, owned by open issues.
+    \item \code{BridgeObligations}: four facts about the code, owned by open issues of
+      SparsePostQuantumRatchet-verify (\#785, \#786, \#787). The result is conditional on them.
     \item No \code{sorry}. Axioms beyond Lean's three: HKDF, HMAC, one libcrux workaround.
   \end{itemize}
 \end{frame}
@@ -139,11 +141,11 @@ theorem code_correctness_error_le (hB : BridgeObligations)
   \vspace{1.2em}
 
   \begin{itemize}\footnotesize
-    \item $RA$: a code state and an SM state are related through \code{Braid}. Some \code{Braid}
-      state $\sigma$ refines to the code state (PR \#781) and is related to the SM state
+    \item $RA$: a code state and an SM state are related through \code{Braid}. The code state
+      refines some \code{Braid} state $\sigma$ (PR \#781), and $\sigma$ is related to the SM state
       (\code{ChunkedRel}). Both parties use it.
     \item \code{ChunkedRel}: the same of the eleven states, equal epochs and authenticators, byte
-      fields as typed values, equal decoders, and each encoder at the same counter. The header that
+      fields as typed values, equal decoders, and each code encoder's \code{u32} counter is SM's counter modulo $2^{32}$. The header that
       \code{Refines} leaves free is taken from the SM state.
     \item $RM$: \code{Braid}'s message map \code{absMsg}, followed by the chunk map
       $c \mapsto (c.\code{index}, c.\code{data})$ into SM.
@@ -173,7 +175,8 @@ theorem code_correctness_error_le (hB : BridgeObligations)
         \item adding a chunk of $p$ to a decoder honest for $p$ keeps it honest, and it then decodes
           nothing or $p$ (\code{Lawful}).
       \end{itemize}
-      SM's set decoder is an instance, so SM's theorems keep their statements.};
+      SM's set decoder is an instance. The generic theorems take the law as a premise, and the
+      concrete v1 bound keeps its statement.};
   \end{tikzpicture}
 \end{frame}
 
@@ -208,15 +211,17 @@ theorem code_correctness_error_le (hB : BridgeObligations)
   \begin{itemize}\footnotesize
     \item SM's bound comes from one lemma, \code{correctness\_error\_le\_of\_potential}, over a
       function $V_2$ on its game states (its ``potential'').
-    \item The bridge applies the same lemma to the code's game, with a $V_1$ built from $V_2$.
-      Here $s_1$ is a state of the code's game and $s_2$ a state of SM's game, related by $RA$:
+    \item The bridge reuses SM's invariant $\mathit{Inv}_2$ and one-step bounds for the code's game,
+      with a $V_1$ built from $V_2$. Here $s_1 \sim s_2$ relates a state of the code's game to a
+      state of SM's game: party states by $RA$, recorded messages by $RM$, and equal key tables,
+      counters and flag.
   \end{itemize}
-  \vspace{0.6em}
+  \vspace{0.1em}
   \[
     V_1(s_1) =
     \begin{cases}
       1 & \text{if } s_1 \text{ has failed} \\
-      \min\bigl(1,\ \inf\{\, V_2(s_2) \mid RA\ s_1\ s_2 \,\}\bigr) & \text{otherwise}
+      \min\bigl(1,\ \inf\{\, V_2(s_2) \mid s_1 \sim s_2,\ \mathit{Inv}_2\ s_2 \,\}\bigr) & \text{otherwise}
     \end{cases}
   \]
   \centering
@@ -227,16 +232,16 @@ theorem code_correctness_error_le (hB : BridgeObligations)
     \node[spec, minimum width=1.4cm] (b') at (5, -0.5) {$s_2'$};
     \draw[flow, realc] (a) -- node[above, label, text=realc] {query to the code} (a');
     \draw[flow, refc] (b) -- node[below, label, text=refc] {same query to SM} (b');
-    \draw[rel] (a) -- node[right, label, text=proofc] {$RA$} (b);
+    \draw[rel] (a) -- node[right, label, text=proofc] {$\sim$} (b);
     \node[label, text=realc, anchor=east] at (-1.2, 0.6) {code's game\\(\code{codeScheme})};
     \node[label, text=refc, anchor=east] at (-1.2, -0.5) {SM's game\\(\code{SPQR.Chunked})};
-    \draw[rel] (a') -- node[right, label, text=proofc] {$RA$, or SM has failed} (b');
+    \draw[rel] (a') -- node[right, label, text=proofc] {$\sim$, or SM has failed} (b');
   \end{tikzpicture}
   \vspace{0.2em}
 
   \begin{itemize}\footnotesize
-    \item The step obligations (slide 9) keep the states related, so $V_1$ inherits SM's bound
-      (\code{correctness\_error\_le\_of\_budgeted\_transfer}).
+    \item The step obligations (slide 9) keep the states related, so $V_1$ inherits SM's bound. The
+      induction counts the remaining sends (\code{correctness\_error\_le\_of\_budgeted\_transfer}).
   \end{itemize}
 \end{frame}
 
@@ -319,7 +324,8 @@ theorem code_correctness_error_le (hB : BridgeObligations)
   \begin{itemize}\footnotesize
     \item $\varepsilon$ is not yet ML-KEM's small error: the workaround in \code{encaps2} only
       promises a 2080-byte state (\#788).
-    \item The bound covers the correctness game: honest delivery, no injection, no liveness.
+    \item The bound covers the correctness game: delivery of unmodified recorded messages, with
+      adversarial order and replay. No injected messages, no liveness.
   \end{itemize}
 \end{frame}
 
