@@ -17,3 +17,5 @@ import SpqrBridge.ChunkedRecv
 import SpqrBridge.ChunkedRecvAll
 import SpqrBridge.ChunkedSend
 import SpqrBridge.ChunkedSendAll
+import SpqrBridge.KeyLength
+import SpqrBridge.NextChunkWrap
