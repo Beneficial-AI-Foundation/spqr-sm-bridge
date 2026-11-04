@@ -240,8 +240,9 @@ theorem code_correctness_error_le (hB : BridgeObligations)
   \vspace{0.2em}
 
   \begin{itemize}\footnotesize
-    \item The step obligations (slide 9) keep the states related, so $V_1$ inherits SM's bound. The
-      induction counts the remaining sends (\code{correctness\_error\_le\_of\_budgeted\_transfer}).
+    \item After each step, the states are related again, or SM's game failed (slide 9). A failed SM
+      game has $V_2 \ge 1 \ge V_1$, so $V_1$ inherits SM's bound. The induction counts the remaining
+      sends (\code{correctness\_error\_le\_of\_budgeted\_transfer}).
   \end{itemize}
 \end{frame}
 
@@ -322,8 +323,11 @@ theorem code_correctness_error_le (hB : BridgeObligations)
   \vspace{0.6em}
 
   \begin{itemize}\footnotesize
-    \item $\varepsilon$ is not yet ML-KEM's small error: the workaround in \code{encaps2} only
-      promises a 2080-byte state (\#788).
+    \item $\varepsilon$ is not yet ML-KEM's small error. The workaround in \code{encaps2} only
+      promises a 2080-byte state (\#788). The FIPS 203 model of \code{sampleNTT} stops after 1024
+      byte triples, but libcrux 0.0.10 does not stop.
+    \item The models and the opaque functions (SHA3, HMAC, libcrux sizes) do not appear in
+      \code{\#print axioms}.
     \item The bound covers the correctness game: delivery of unmodified recorded messages, with
       adversarial order and replay. No injected messages, no liveness.
   \end{itemize}
