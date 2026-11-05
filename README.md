@@ -242,12 +242,15 @@ to the adversary. Liveness needs progress laws for the decoder and delivery assu
 
 | Package | Repository | Branch | Commit |
 |---|---|---|---|
-| `Spqr` | SparsePostQuantumRatchet-verify | `la/bridge-aeneas-bump` | `1017e52` |
+| `Spqr` | SparsePostQuantumRatchet-verify | `la/bridge-aeneas-bump-main` | `c950d94` |
 | `SecureMessaging` | secure-messaging | `la/generic-decoder` | `c16e287` |
 
-`lakefile.toml` pins both commits. Both packages use Lean `v4.35.0` and Mathlib `56a00585`. The
-first build compiles both dependencies and takes a while. `lake exe cache get` fetches Mathlib
-only.
+The `Spqr` branch is `main` at `15bf667`, which includes
+[#781](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/pull/781), plus
+one commit that moves to Aeneas `nightly-2026.11.03-ab34bd2` and Lean `v4.35.0` (see
+[Limits](#limits)). `lakefile.toml` pins both commits. Both packages use Lean `v4.35.0` and Mathlib
+`56a00585`. The first build compiles both dependencies and takes a while. `lake exe cache get`
+fetches Mathlib only.
 
 Install Lean through [elan](https://github.com/leanprover/elan), which reads `lean-toolchain`.
 Then, from the repository root:
