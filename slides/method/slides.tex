@@ -97,6 +97,41 @@
   \end{tikzpicture}
 \end{frame}
 
+% ---------------------------------------------------------------- 2b
+\begin{frame}[t]{The gap, closed}
+  \vspace{1.2em}
+  \centering
+  \begin{tikzpicture}[scale=0.8, transform shape, every node/.append style={font=\scriptsize}]
+    \node[impl, text width=5.4cm] (rust) at (0, 2) {Rust code (SparsePostQuantumRatchet)};
+    \node[impl, text width=5.4cm] (lean) at (0, 0.6) {Lean code (Aeneas extraction)};
+    \node[spec, text width=5.4cm] (braid) at (0, -1.0) {\code{Braid}: ML-KEM Braid,\\with the code's deviations};
+    \draw[flow] (rust) -- node[right, label] {Aeneas} (lean);
+    \draw[rel] (lean) -- node[right, label, text=proofc] {refinement, per step} (braid);
+
+    \node[spec, text width=5.4cm] (chunked) at (10.5, -1.0) {\code{SPQR.Chunked}: SM model\\of the code};
+    \node[proof, text width=5.4cm] (bound) at (10.5, -2.6) {correctness bound $1 - \Pr[\text{ok}] \le q\varepsilon$};
+    \draw[flow, proofc] (chunked) -- node[right, label, text=proofc] {SM proof} (bound);
+
+    \draw[rel] (braid.east) -- node[above, label, text=proofc] {\code{ChunkedRel}, every arm}
+      node[below, label, text=proofc] {this repository} (chunked.west);
+
+    \node[proof, text width=4.0cm, font=\scriptsize, line width=1.4pt] (codebound) at (3.2, -2.6)
+      {\textbf{on the code:} $1 - \Pr[\text{ok}] \le q\varepsilon$\\
+       \code{code\_correctness\_error\_le}};
+    \draw[flow, proofc, very thick] (bound.west) -- node[above, label, text=proofc]
+      {bound transfer} (codebound.east);
+    \draw[flow, realc] (lean.west) -- ++(-0.5, 0) |- node[pos=0.75, below, label, text=realc]
+      {\code{codeScheme}} (codebound.west);
+
+    \node[gap, text width=5.6cm] (prem) at (3.2, -4.0)
+      {if \code{BridgeObligations} hold\\(open: \#785, \#786, \#787)};
+    \draw[gapc, dashed, thick, ->] (prem) -- (codebound);
+
+    \node[label, text=trustc] at (0, 2.9) {SparsePostQuantumRatchet-verify};
+    \node[label, text=trustc] at (10.5, -0.2) {secure-messaging (SM)};
+  \end{tikzpicture}
+\end{frame}
+
 % ---------------------------------------------------------------- 3
 \begin{frame}[t,fragile]{The result}
   \vspace{0.2em}
@@ -125,7 +160,7 @@ theorem code_correctness_error_le (hB : BridgeObligations)
 \end{frame}
 
 % ---------------------------------------------------------------- 4
-\begin{frame}[t]{The chain of relations}
+\begin{frame}[t]{The chain of relations}\label{fr:chain}
   \vspace{0.9em}
   \centering
   \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
@@ -240,7 +275,7 @@ theorem code_correctness_error_le (hB : BridgeObligations)
   \vspace{0.2em}
 
   \begin{itemize}\footnotesize
-    \item After each step, the states are related again, or SM's game failed (slide 9). A failed SM
+    \item After each step, the states are related again, or SM's game failed (slide \ref{fr:oblig}). A failed SM
       game has $V_2 \ge 1 \ge V_1$, so $V_1$ inherits SM's bound. The induction counts the remaining
       sends (\code{correctness\_error\_le\_of\_budgeted\_transfer}).
   \end{itemize}
@@ -274,7 +309,7 @@ theorem code_correctness_error_le (hB : BridgeObligations)
 \end{frame}
 
 % ---------------------------------------------------------------- 10
-\begin{frame}[t]{The step obligations}
+\begin{frame}[t]{The step obligations}\label{fr:oblig}
   \vspace{0.9em}
   \centering
   \begin{tikzpicture}[every node/.append style={font=\scriptsize},
@@ -362,6 +397,124 @@ theorem code_correctness_error_le (hB : BridgeObligations)
          \item \#788, so that $\varepsilon$ can be identified with ML-KEM-768's error.
        \end{itemize}};
   \end{tikzpicture}
+\end{frame}
+
+% ---------------------------------------------------------------- 13
+\begin{frame}[t]{Two routes from SM's bound to the code}
+  \footnotesize
+  SM proves its bound for the game over \code{SPQR.Chunked}. To move it, relate each state of the
+  code's game to a state of SM's game, step by step.
+  \vspace{0.1em}
+
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+    \node[impl, minimum width=3.0cm] (c) at (0, 0) {\textbf{code}\\extracted \code{States}};
+    \node[spec, minimum width=3.0cm] (k) at (9, 0) {\textbf{\code{SPQR.Chunked}}\\SM model};
+    \node[spec, minimum width=3.0cm] (b) at (4.5, 2.1) {\textbf{\code{Braid}}\\ML-KEM Braid, with\\the code's deviations};
+    \node[proof, below=0.7cm of k] (q) {$\Pr[\text{fail}] \le q\varepsilon$};
+    \draw[flow, proofc] (k) -- node[right, label, text=proofc] {SM proof} (q);
+
+    \draw[gapc, very thick, dashed] (c) -- node[below=4pt, label, text=gapc]
+      {\textbf{route A}: one direct relation} (k);
+
+    \draw[rel] (c) -- node[left=6pt, label, text=proofc, pos=0.5]
+      {\code{Refines}\\spqr-verify} (b.west);
+    \draw[rel] (b.east) -- node[right=6pt, label, text=proofc, pos=0.5]
+      {\code{ChunkedRel}\\this repository} (k);
+    \node[label, text=proofc] at (4.5, 0.75) {\textbf{route B}: through \code{Braid}};
+  \end{tikzpicture}
+  \vspace{0.3em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item Both routes must give one relation $RA$ between code states and SM states that every
+      step preserves.
+    \item Route B builds it as a composition through \code{Braid} (slide \ref{fr:chain}).
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------- 14
+\begin{frame}[t]{What a direct relation would have to prove}
+  \footnotesize
+  A step of route A relates one Rust step to one SM step. It mixes two kinds of facts.
+  \vspace{0.4em}
+
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+    \node[gap, minimum width=12.4cm] (a) at (0, 0)
+      {route A: \implside{one Rust step} $\sim$ \specside{one \code{SPQR.Chunked} step}};
+
+    \node[impl, text width=6.2cm, align=left, font=\scriptsize] (l) at (-3.45, -0.6) [anchor=north] {%
+      \textbf{about the code}
+      \begin{itemize}\scriptsize\setlength{\itemsep}{0pt}
+        \item \code{Result}: panics, divergence, \code{Err}
+        \item \code{u64} and \code{usize} bounds
+        \item bytes, slices, serialization
+        \item calls to ML-KEM, HKDF, HMAC
+        \item which random bytes each send reads
+      \end{itemize}};
+    \node[spec, text width=6.2cm, align=left, font=\scriptsize] (r) at (3.45, -0.6) [anchor=north] {%
+      \textbf{about the models}
+      \begin{itemize}\scriptsize\setlength{\itemsep}{0pt}
+        \item byte fields against typed values
+        \item epochs: \code{u64} against $\mathbb{N}$
+        \item streaming decoder against set decoder
+        \item encoder counter modulo $2^{32}$
+        \item deviations of the code from §2.5
+      \end{itemize}};
+    \draw[flow, gapc] (a.south -| l) -- (l);
+    \draw[flow, gapc] (a.south -| r) -- (r);
+
+    \node[proof, text width=6.2cm, font=\scriptsize, below=0.3cm of l] (lp)
+      {functional correctness: spqr-verify\\\code{Refines}, \#785, \#787};
+    \node[proof, text width=6.2cm, font=\scriptsize, below=0.3cm of r] (rp)
+      {model matching: this repository\\\code{ChunkedRel}};
+    \draw[flow, proofc] (l) -- (lp);
+    \draw[flow, proofc] (r) -- (rp);
+  \end{tikzpicture}
+  \vspace{0.4em}
+
+  \raggedright
+  Route A needs the left column too. spqr-verify proves it once, against \code{Braid}, and
+  route B reuses that proof.
+\end{frame}
+
+% ---------------------------------------------------------------- 15
+\begin{frame}[t]{Why \code{Braid} in the middle}
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+    \node[spec, minimum width=2.8cm] (b) at (0, 0) {\textbf{\code{Braid}}\\one abstract\\machine};
+
+    \node[spec, minimum width=3.0cm] (p) at (-5.0, 1.1) {ML-KEM Braid §2.5\\(the paper)};
+    \node[impl, minimum width=3.0cm] (c) at (-5.0, -0.3) {code, v1.6.0};
+    \node[impl, minimum width=3.0cm, dashed] (c2) at (-5.0, -1.25) {next code version};
+    \node[spec, minimum width=3.0cm] (k) at (5.0, 1.1) {\code{SPQR.Chunked}\\SM correctness};
+    \node[spec, minimum width=3.0cm, dashed] (s) at (5.0, -0.15) {other SM models\\or security games};
+    \node[spec, minimum width=3.0cm, dashed] (o) at (5.0, -1.25) {other properties};
+
+    \draw[ink!60, thick, dotted] (p.east) -- node[above, sloped, label, text=ink!70, pos=0.6] {deviations named} (b.north west);
+    \draw[rel] (c.east) -- node[below, sloped, label, text=proofc, pos=0.55] {\code{Refines}} (b.west);
+    \draw[rel, proofc!40] (c2.east) -- (b.south west);
+    \draw[rel] (b.north east) -- node[above, sloped, label, text=proofc, pos=0.45] {\code{ChunkedRel}} (k.west);
+    \draw[rel, proofc!40] (b.east) -- (s.west);
+    \draw[rel, proofc!40] (b.south east) -- (o.west);
+
+    \node[label, text=realc] at (-5.0, -1.85) {code side: spqr-verify};
+    \node[label, text=refc] at (5.0, -1.85) {model side: bridges};
+  \end{tikzpicture}
+  \vspace{0.3em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item Each repository proves what it owns: facts about the Rust code next to the extraction,
+      facts about SM's model next to SM.
+    \item A change on one side redoes one relation only. A new code version redoes
+      \code{Refines}. A new model needs a new relation from \code{Braid}.
+    \item \code{Braid} reads like the paper, with each deviation named. A relation to it is easier
+      to review than a relation to Rust bytes.
+    \item The cost: one more model to maintain. \code{ChunkedRel} still needs two code facts: the
+      Rust decoder is lawful, and the encoder counter wraps.
+  \end{itemize}
 \end{frame}
 
 \end{document}
