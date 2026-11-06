@@ -154,7 +154,8 @@ theorem code_correctness_error_le (hB : BridgeObligations)
       independent of earlier sends, and the code reads at most 64 of them.
     \item $\varepsilon$: the correctness error of \code{codeKem}, the KEM of the code's ML-KEM models.
     \item \code{BridgeObligations}: four facts about the code, owned by open issues of
-      SparsePostQuantumRatchet-verify (\#785, \#786, \#787). The result is conditional on them.
+      SparsePostQuantumRatchet-verify (\#785, \#786, \#787). The send and receive facts cover
+      reachable runs only. The result is conditional on them.
     \item No \code{sorry}. Axioms beyond Lean's three: HKDF, HMAC, one libcrux workaround.
   \end{itemize}
 \end{frame}

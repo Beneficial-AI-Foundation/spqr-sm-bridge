@@ -15,7 +15,8 @@ with `S₁` the code's scheme and `S₂` secure-messaging's SPQR scheme over `co
   `SPQR.correctness_error_le`, as in `spqr_correctness_error_le_of_transfer`. Its decoders are
   lawful by `L2.polyStreamDecoder_lawful`.
 * The code-side invariant is `CodeGameInv`, with budget `2^64 - 2`. Below it, the invariant gives
-  the reachability and epoch headroom that `send_chunked` and `receive_chunked` need.
+  the reachability and epoch headroom that `send_chunked` and `receive_chunked` need, and that
+  each delivered message was sent in the same run.
 * Both parties use the relation `RA`, and messages use `RM`.
 -/
 
@@ -36,6 +37,17 @@ theorem reachParty_of_codeGameInv {s : GameState States States (B 32) Message}
     (h : CodeGameInv s) : ReachParty s.stA (s.nA + s.nB) ∧ ReachParty s.stB (s.nA + s.nB) := by
   obtain ⟨mA, mB, hr, -, -⟩ := h
   exact ⟨⟨_, _, mA, mB, hr, Or.inl rfl⟩, ⟨_, _, mA, mB, hr, Or.inr rfl⟩⟩
+
+/-- Let a game state have `CodeGameInv`. A message in B's transit array is a message that B sent
+in the game's run, so `ReachRecv` holds for A and that message. The same holds with the parties
+swapped. -/
+theorem reachRecv_of_codeGameInv {s : GameState States States (B 32) Message}
+    (h : CodeGameInv s) {n tsnd : ℕ} {ρ : Message} :
+    (s.msgB n = some (ρ, tsnd) → ReachRecv s.stA ρ (s.nA + s.nB)) ∧
+      (s.msgA n = some (ρ, tsnd) → ReachRecv s.stB ρ (s.nA + s.nB)) := by
+  obtain ⟨mA, mB, hr, hA, hB⟩ := h
+  exact ⟨fun hm => ⟨_, _, mA, mB, hr, .inl ⟨rfl, mem_of_recorded hB hm⟩⟩,
+    fun hm => ⟨_, _, mA, mB, hr, .inr ⟨rfl, mem_of_recorded hA hm⟩⟩⟩
 
 /-- The code meets the budgeted obligations against secure-messaging's SPQR scheme, with budget
 `2^64 - 2`. -/
@@ -58,11 +70,11 @@ theorem codeBudgetedObligations (hB : BridgeObligations) (sampleInitKey : ProbCo
       (by omega) hrel.stB
   recvA _ s₁ s₂ n tsnd ρ₁ ρ₂ _ hinv hbud hrel _ h₁ _ hρ := by
     have he := (codeGameInv_epochs s₁ hinv).2.2 n ρ₁ tsnd (Or.inr h₁)
-    exact receive_chunked hB s₁.stA _ s₂.stA ρ₁ ρ₂ (reachParty_of_codeGameInv hinv).1
+    exact receive_chunked hB s₁.stA _ s₂.stA ρ₁ ρ₂ ((reachRecv_of_codeGameInv hinv).1 h₁)
       (by omega) hrel.stA hρ
   recvB _ s₁ s₂ n tsnd ρ₁ ρ₂ _ hinv hbud hrel _ h₁ _ hρ := by
     have he := (codeGameInv_epochs s₁ hinv).2.2 n ρ₁ tsnd (Or.inl h₁)
-    exact receive_chunked hB s₁.stB _ s₂.stB ρ₁ ρ₂ (reachParty_of_codeGameInv hinv).2
+    exact receive_chunked hB s₁.stB _ s₂.stB ρ₁ ρ₂ ((reachRecv_of_codeGameInv hinv).2 h₁)
       (by omega) hrel.stB hρ
 
 /-- Assume the allowed assumptions. Let `sampleInitKey` sample initial keys that the code
