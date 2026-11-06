@@ -60,7 +60,7 @@ theorem sendRel_of_braid (hB : BridgeObligations) (s : States) (n : ℕ) (σ : B
     (h : SendAgree (Braid.send codePrims σ (t.1.take (seedLen σ))) res) :
     SendRel RA RM (sendStep s t.1) (some (res.outputKey, res.msg, res.sendingEpoch, res.state)) := by
   obtain ⟨out, hout⟩ := hB.send_total s n t.1 hreach hep (by rw [t.2])
-  obtain ⟨hst, hmsg, hkey⟩ := hB.send_refines_tape s σ t.1 out hσ hout
+  obtain ⟨hst, hmsg, hkey⟩ := hB.send_refines_tape s n σ t.1 out hreach hep t.2 hσ hout
   have hlen := codeSend_key_length s t.1 out hout
   obtain ⟨hrel, he, hp, hk, hse⟩ := h
   rw [← hmsg] at he hp hse

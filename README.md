@@ -45,8 +45,8 @@ The proof composes three relations:
    abstract machine `Braid` that follows ML-KEM Braid [MLKEMBraid], with the code's deviations.
    Its proved theorems, `send_refines` and `recv_refines`, cover one direction: a step of the code
    that succeeds refines a `Braid` step, for some randomness. The bound needs more: `send` does not
-   fail, its randomness is the prefix of the bytes it read, and the code accepts every message that
-   `Braid` accepts. These are the fields `send_total`, `send_refines_tape` and `recv_complete` of
+   fail, its randomness is the prefix of the bytes it read, and the code accepts every message of
+   the same run that `Braid` accepts. These are the fields `send_total`, `send_refines_tape` and `recv_complete` of
    `BridgeObligations`. So the part of step 1 that the theorem uses is assumed, not proved, and
    `code_correctness_error_le` does not use `send_refines` or `recv_refines`.
 2. **`Braid` to `SPQR.Chunked`.** This repository relates `Braid` to secure-messaging's model
@@ -95,16 +95,18 @@ SparsePostQuantumRatchet-verify:
 |---|---|---|
 | `mlkem_sizes` | libcrux reports the ML-KEM-768 sizes 960 (`ct1`), 128 (`ct2`) and 1152 (encapsulation key) | [#786](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/786) |
 | `send_total` | on a reachable state whose epoch plus one fits in a `u64`, `send` with at least 64 bytes of randomness succeeds | [#785](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/785) |
-| `recv_complete` | on a reachable state that refines a `Braid` state, where `Braid` accepts a message whose epoch plus one fits in a `u64`, `recv` succeeds with a state that refines `Braid`'s next state and with the same key | [#785](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/785) |
-| `send_refines_tape` | a successful `send` takes the `Braid` step whose randomness is the prefix of the bytes that the code read: the next states are related, and the message and key are the same | [#787](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/787) |
+| `recv_complete` | on a reachable state that refines a `Braid` state, for a message that the other party sent in the same run, whose epoch plus one fits in a `u64` and that `Braid` accepts, `recv` succeeds with a state that refines `Braid`'s next state and with the same key | [#785](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/785) |
+| `send_refines_tape` | on a reachable state whose epoch plus one fits in a `u64`, a successful `send` with 64 bytes of randomness takes the `Braid` step whose randomness is the prefix of the bytes that the code read: the next states are related, and the message and key are the same | [#787](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/787) |
 
 The exact statements are the fields of `BridgeObligations` in `SpqrBridge/CodeBound.lean`.
 
 Nobody has shown yet that the four fields hold together. If one is false, the theorem says
-nothing. Two fields claim more than the correctness game needs: `send_refines_tape` has no
-reachability premise, and `recv_complete` covers every message that `Braid` accepts, not only
-recorded ones. If a proof of a field fails at this generality, the field can be narrowed to the
-states and messages of `CodeGameInv`.
+nothing. To lower that risk, the fields about `send` and `recv` take the premises that the proof
+can supply from the code-side game invariant `CodeGameInv`. The state is reachable
+(`ReachParty`): a run of the code's own sends, and receives of sent messages (`CodeReach`), ends
+in it. The epochs leave room for one more, as the table states. `send_refines_tape` covers only
+64-byte tapes. `recv_complete` covers only messages that the other party sent in the same run
+(`ReachRecv`).
 
 ### Axioms
 

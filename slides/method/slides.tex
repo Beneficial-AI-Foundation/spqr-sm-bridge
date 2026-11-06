@@ -109,7 +109,7 @@
     \draw[rel] ([xshift=-0.7cm]lean.south) -- node[left, label, text=proofc, align=right]
       {proved: a successful step\\is a \code{Braid} step\\for \emph{some} randomness} ([xshift=-0.7cm]braid.north);
     \draw[gapc, very thick, dashed] ([xshift=0.7cm]lean.south) -- node[right, label, text=gapc, align=left]
-      {assumed (\code{BridgeObligations}):\\send succeeds, its randomness\\is the tape, recv is complete} ([xshift=0.7cm]braid.north);
+      {assumed (\code{BridgeObligations}), on reachable runs:\\send succeeds, its randomness\\is the tape, recv is complete} ([xshift=0.7cm]braid.north);
 
     \node[spec, text width=4.4cm] (chunked) at (10.5, -1.4) {\code{SPQR.Chunked}: SM model\\of the code};
     \node[proof, text width=3.6cm, font=\scriptsize] (bound) at (10.9, -3.1) {SM bound $1 - \Pr[\text{ok}] \le q\varepsilon$};
@@ -142,7 +142,8 @@
 \begin{frame}[t,fragile]{The result}
   \vspace{0.2em}
   \footnotesize
-  Assume the four facts about the code in \code{BridgeObligations}, which are not proved yet. Let
+  Assume the four facts about the code in \code{BridgeObligations}, which are not proved yet. The
+  send and receive facts cover reachable runs only. Let
   \code{adv} make at most $q$ send queries, counted over both parties, with $q + 2 < 2^{64}$.\\[0.3em]
   Then the probability that the correctness game fails on the code is at most $q\varepsilon$.
   \vspace{0.2em}

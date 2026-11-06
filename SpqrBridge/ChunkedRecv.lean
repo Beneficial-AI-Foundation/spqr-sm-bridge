@@ -22,13 +22,13 @@ namespace SpqrBridge
 open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
 open ErasureCodePayload.Streaming
 
-/-- Let `s` be reachable and refine `σ`, with message epoch headroom, and let the messages be
-related. Assume that whenever `Chunked.recv` accepts, `Braid.receive` accepts with a related
+/-- Let `s` be reachable and refine `σ`, let `msg` be a message that the other party sent in the
+same run, with epoch headroom, and let the messages be related. Assume that whenever `Chunked.recv` accepts, `Braid.receive` accepts with a related
 state, the same key and the report `msg'.epoch - 1`. Then the code's receive and
 secure-messaging's receive are related by `RecvRel RA`. -/
 theorem recvRel_of_braid (hB : BridgeObligations) (s : States) (n : ℕ) (σ : BState)
     (st : SMState) (msg : Message) (msg' : SPQR.Chunked.Message L2.Sym)
-    (hreach : ReachParty s n) (hσ : Refines s σ) (hep : msg.epoch.val + 1 < 2 ^ 64)
+    (hreach : ReachRecv s msg n) (hσ : Refines s σ) (hep : msg.epoch.val + 1 < 2 ^ 64)
     (hRM : RM msg msg')
     (h : ∀ r, SPQR.Chunked.recv codeParams codeAuth st msg' = .ok r →
       ∃ σ', Braid.receive codePrims σ (absMsg msg) =
@@ -544,7 +544,7 @@ theorem recv_ekReceivedCt1Sampled_ack (σ : BState) (ep : ℕ) (a : Auth) (hdr :
 theorem recvRel_ekSentCt1Received_ct2 (hB : BridgeObligations) (s : States) (n : ℕ) (ep : ℕ)
     (a : Auth) (sk : B 2400) (c1 : B 960) (dec : encoding.polynomial.PolyDecoder)
     (msg : Message) (msg' : SPQR.Chunked.Message L2.Sym) (c : encoding.Chunk)
-    (hreach : ReachParty s n) (hep : msg.epoch.val + 1 < 2 ^ 64)
+    (hreach : ReachRecv s msg n) (hep : msg.epoch.val + 1 < 2 ^ 64)
     (hRA : RA s (.ekSentCt1Received ⟨ep, a, sk, c1⟩ dec)) (hRM : RM msg msg')
     (hpay : msg.payload = .Ct2 c) (hepoch : msg'.epoch = ep) :
     RecvRel RA (recvStep s msg)

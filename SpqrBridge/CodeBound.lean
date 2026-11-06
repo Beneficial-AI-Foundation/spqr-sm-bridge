@@ -40,6 +40,11 @@ open SCKAScheme
 def ReachParty (s : States) (n : ℕ) : Prop :=
   ∃ sA sB mA mB, CodeReach sA sB mA mB n ∧ (s = sA ∨ s = sB)
 
+/-- `s` is the state of one party in a reachable run of the code, with `n` successful sends, and
+`msg` is a message that the other party sent in that run. -/
+def ReachRecv (s : States) (msg : Message) (n : ℕ) : Prop :=
+  ∃ sA sB mA mB, CodeReach sA sB mA mB n ∧ ((s = sA ∧ msg ∈ mB) ∨ (s = sB ∧ msg ∈ mA))
+
 /-- The recorded messages of one party: entry `k + 1` of the transit array is message `k` of the
 run, for `k` below the send count, and every other entry is empty. -/
 def RecordedAs (msg : ℕ → Option (Message × ℕ)) (count : ℕ) (ms : List Message) : Prop :=
@@ -137,20 +142,22 @@ structure BridgeObligations : Prop where
   send_total : ∀ (s : States) (n : ℕ) (tape : List Std.U8), ReachParty s n →
     s.epochOf.val + 1 < 2 ^ 64 → 64 ≤ tape.length →
       ∃ out, codeSend s tape = some out
-  /-- Open upstream, #785 statement 2: where the machine accepts, `recv` returns `Ok` with a
-  related state and the same key. -/
+  /-- Open upstream, #785 statement 2: on a reachable state, for a message that the other party
+  sent in the same run, where the machine accepts, `recv` returns `Ok` with a related state and
+  the same key. -/
   recv_complete : ∀ (s : States) (n : ℕ) (σ σ' : Braid.State encoding.polynomial.PolyEncoder
       encoding.polynomial.PolyDecoder) (msg : Message) (k : Option Key),
-    ReachParty s n → Refines s σ → msg.epoch.val + 1 < 2 ^ 64 →
+    ReachRecv s msg n → Refines s σ → msg.epoch.val + 1 < 2 ^ 64 →
       Braid.receive codePrims σ (absMsg msg) = some (σ', k) →
         ∃ out, codeRecv s msg = some out ∧ Refines out.state σ' ∧ out.key.map absKey = k
-  /-- Open upstream, #787 statement 5: the machine's randomness is the tape prefix that the
-  code read. -/
-  send_refines_tape : ∀ (s : States) (σ : Braid.State encoding.polynomial.PolyEncoder
+  /-- Open upstream, #787 statement 5: on a reachable state below the epoch limit, with a
+  64-byte tape, the machine's randomness is the tape prefix that the code read. -/
+  send_refines_tape : ∀ (s : States) (n : ℕ) (σ : Braid.State encoding.polynomial.PolyEncoder
       encoding.polynomial.PolyDecoder) (tape : List Std.U8) (out : v1.chunked.states.Send),
-    Refines s σ → codeSend s tape = some out →
-      Refines out.state (Braid.send codePrims σ (tape.take (seedLen σ))).1 ∧
-        absMsg out.msg = (Braid.send codePrims σ (tape.take (seedLen σ))).2.1 ∧
-        out.key.map absKey = (Braid.send codePrims σ (tape.take (seedLen σ))).2.2
+    ReachParty s n → s.epochOf.val + 1 < 2 ^ 64 → tape.length = 64 →
+      Refines s σ → codeSend s tape = some out →
+        Refines out.state (Braid.send codePrims σ (tape.take (seedLen σ))).1 ∧
+          absMsg out.msg = (Braid.send codePrims σ (tape.take (seedLen σ))).2.1 ∧
+          out.key.map absKey = (Braid.send codePrims σ (tape.take (seedLen σ))).2.2
 
 end SpqrBridge
