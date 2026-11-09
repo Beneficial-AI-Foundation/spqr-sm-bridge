@@ -51,8 +51,7 @@
 \newcommand{\specside}[1]{\textcolor{refc}{#1}}
 \newcommand{\implside}[1]{\textcolor{realc}{#1}}
 
-\title{From a model bound to the code}
-\subtitle{\vspace{0.8em}Transferring secure-messaging's SCKA correctness bound to the extracted SPQR code}
+\title{Transferring secure-messaging's SCKA correctness bound to the extracted SPQR code}
 \author{SpqrBridge}
 \date{November 2026}
 
@@ -62,11 +61,11 @@
 \begin{frame}
   \titlepage
   \centering
-  \begin{tikzpicture}[scale=0.85, transform shape, every node/.append style={font=\scriptsize}]
+  \begin{tikzpicture}[scale=0.8, transform shape, every node/.append style={font=\scriptsize}]
     \node[impl] (c) {\textbf{code}\\extracted \code{States}};
-    \node[spec, right=0.9cm of c] (b) {\textbf{\code{Braid}}\\abstract machine};
-    \node[spec, right=0.9cm of b] (k) {\textbf{\code{SPQR.Chunked}}\\SM model};
-    \node[proof, right=0.9cm of k] (q) {$\Pr[\text{fail}] \le q\varepsilon$\\if four open facts hold};
+    \node[spec, right=1.3cm of c] (b) {\textbf{\code{Braid}}\\abstract machine};
+    \node[spec, right=1.3cm of b] (k) {\textbf{\code{SPQR.Chunked}}\\SM model};
+    \node[proof, right=1.3cm of k] (q) {$\Pr[\text{fail}] \le q\varepsilon$\\if four open facts hold};
     \draw[rel] (c) -- node[above, label, text=proofc] {refines} (b);
     \draw[rel] (b) -- node[above, label, text=proofc] {related} (k);
     \draw[flow, proofc] (k) -- node[above, label, text=proofc] {SM proof} (q);
@@ -102,17 +101,17 @@
   \vspace{0.6em}
   \centering
   \begin{tikzpicture}[scale=0.8, transform shape, every node/.append style={font=\scriptsize}]
-    \node[impl, text width=5.4cm] (rust) at (0, 2) {Rust code (SparsePostQuantumRatchet)};
-    \node[impl, text width=5.4cm] (lean) at (0, 0.6) {Lean code (Aeneas extraction)};
+    \node[impl, text width=5.4cm] (rust) at (0, 2.3) {Rust code (SparsePostQuantumRatchet)};
+    \node[impl, text width=5.4cm] (lean) at (0, 1.1) {Lean code (Aeneas extraction)};
     \node[spec, text width=5.4cm] (braid) at (0, -1.4) {\code{Braid}: ML-KEM Braid,\\with the code's deviations};
     \draw[flow] (rust) -- node[right, label] {Aeneas} (lean);
-    \draw[rel] ([xshift=-0.7cm]lean.south) -- node[left, label, text=proofc, align=right]
-      {proved: a successful step\\is a \code{Braid} step\\for \emph{some} randomness} ([xshift=-0.7cm]braid.north);
-    \draw[gapc, very thick, dashed] ([xshift=0.7cm]lean.south) -- node[right, label, text=gapc, align=left]
-      {assumed (\code{BridgeObligations}), on reachable runs:\\send succeeds, its randomness\\is the tape, recv is complete} ([xshift=0.7cm]braid.north);
+    \draw[rel] ([xshift=-1.2cm]lean.south) -- node[left, label, text=proofc, align=right]
+      {proved: a successful step\\is a \code{Braid} step\\for \emph{some} randomness} ([xshift=-1.2cm]braid.north);
+    \draw[gapc, very thick, dashed] ([xshift=1.2cm]lean.south) -- node[right, label, text=gapc, align=left]
+      {assumed (\code{BridgeObligations}), on reachable runs:\\send succeeds, its randomness\\is the tape, recv is complete} ([xshift=1.2cm]braid.north);
 
     \node[spec, text width=4.4cm] (chunked) at (10.5, -1.4) {\code{SPQR.Chunked}: SM model\\of the code};
-    \node[proof, text width=3.6cm, font=\scriptsize] (bound) at (10.9, -3.1) {SM bound $1 - \Pr[\text{ok}] \le q\varepsilon$};
+    \node[proof, text width=3.6cm, font=\scriptsize] (bound) at (10.5, -3.1) {SM bound $1 - \Pr[\text{ok}] \le q\varepsilon$};
     \draw[flow, proofc] (chunked) -- node[right, label, text=proofc] {SM proof} (bound);
 
     \draw[rel] (braid.east) -- node[above, label, text=proofc] {\code{ChunkedRel}, every arm}
@@ -128,7 +127,7 @@
     \draw[flow, proofc, very thick] (bound.west) -- node[above, label, text=proofc]
       {transfer} (codebound.east);
 
-    \node[label, text=trustc] at (0, 2.9) {SparsePostQuantumRatchet-verify};
+    \node[label, text=trustc] at (0, 3.1) {SparsePostQuantumRatchet-verify};
     \node[label, text=trustc] at (10.5, -0.6) {secure-messaging (SM)};
   \end{tikzpicture}
 
@@ -170,49 +169,57 @@ theorem code_correctness_error_le (hB : BridgeObligations)
 
 % ---------------------------------------------------------------- 3b
 \begin{frame}[t]{Where the code starts running in \code{ProbComp}}\label{fr:lift}
-  \footnotesize A send of the code, in \code{Adapter.lean}:\quad
-\\[0.2em]
-  \code{codeSendA s = do let t ← sampleTape; pure (sendStep s t)}
-  \vspace{0.5em}
+  \footnotesize A send of the code: \code{codeSendA s = do let t ← sampleTape; pure (sendStep s t)}\\[0.2em]
+  Only \code{sampleTape} is random. All that follows is a plain function of the tape $t$.
+  \vspace{0.2em}
 
   \centering
-  \begin{tikzpicture}[scale=0.9, transform shape, every node/.append style={font=\scriptsize}]
-    \node[proof, text width=2.2cm, font=\scriptsize] (tape) at (0, 0) {\code{sampleTape}\\64 uniform\\bytes};
-    \node[impl, text width=3.4cm, font=\scriptsize] (run) at (4.1, 0) {\code{States.send} with \code{tapeRng}\\deterministic, in \code{Result}};
-    \node[impl, text width=2.8cm, font=\scriptsize] (cls) at (8.2, 0) {\code{Ok} $\mapsto$ \code{some}\\panic, divergence,\\\code{Err} $\mapsto$ \code{none}};
-    \node[spec, text width=2.0cm, font=\scriptsize] (out) at (11.6, 0) {SCKA output};
+  \begin{tikzpicture}[scale=0.8, transform shape, every node/.append style={font=\scriptsize},
+      stage/.style={minimum height=1.0cm, font=\scriptsize}]
+    \node[proof, stage, text width=2.2cm] (tape) at (0, 0) {\code{sampleTape}\\64 uniform bytes $t$};
+    \node[impl, stage, text width=3.4cm] (run) at (4.1, 0) {\code{States.send} with \code{tapeRng}\\(reads $t$), in \code{Result}};
+    \node[impl, stage, text width=2.8cm] (cls) at (8.2, 0) {\code{Ok} $\mapsto$ \code{some}\\\code{Err}, panic,\\divergence $\mapsto$ \code{none}};
+    \node[spec, stage, text width=2.0cm] (out) at (11.6, 0) {SCKA output};
     \draw[flow, proofc] (tape) -- node[above, label, text=proofc] {$t$} (run);
     \draw[flow, realc] (run) -- (cls);
     \draw[flow, realc] (cls) -- (out);
     \draw[decorate, decoration={brace, amplitude=5pt}, proofc, thick]
-      ($(tape.north west)+(0,0.15)$) -- ($(tape.north east)+(0,0.15)$)
-      node[midway, above=5pt, label, text=proofc] {the only random step};
+      ($(tape.north west |- cls.north)+(0,0.15)$) -- ($(tape.north east |- cls.north)+(0,0.15)$)
+      node[midway, above=5pt, label, text=proofc] {random};
     \draw[decorate, decoration={brace, amplitude=5pt}, realc, thick]
-      ($(run.north west)+(0,0.15)$) -- ($(out.north east)+(0,0.15)$)
-      node[midway, above=5pt, label, text=realc] {a function of $t$: \code{sendStep s}};
-  \end{tikzpicture}
-  \vspace{0.6em}
-
-  \begin{tikzpicture}[every node/.append style={font=\scriptsize},
-      lay/.style={text width=3.9cm, align=left, font=\scriptsize, minimum height=1.8cm}]
-    \node[proof, lay] (A) at (0, 0) {\textbf{A. Definition}\\the distribution of a send is the
-      image of \code{sampleTape} under \code{sendStep s}. No axiom.};
-    \node[proof, lay] (B) at (4.3, 0) {\textbf{B. Deterministic facts}\\
-      \code{codeSend\_eq\_some\_iff}: \code{some} iff the code returns \code{Ok}.
-      \code{dropRng\_send\_prefix}: a send reads only the first 64 bytes
-      (key generation 64, encapsulation 32).};
-    \node[proof, lay] (C) at (8.6, 0) {\textbf{C. Coupling with SM}\\
-      \code{send\_chunked}: a \code{RelTriple} on the same tape in the two sampling states;
-      elsewhere both sides ignore the tape.};
-    \draw[flow, proofc] (A) -- (B);
-    \draw[flow, proofc] (B) -- (C);
+      ($(run.north west |- cls.north)+(0,0.15)$) -- ($(out.north east |- cls.north)+(0,0.15)$)
+      node[midway, above=5pt, label, text=realc] {deterministic: \code{sendStep s t}};
   \end{tikzpicture}
   \vspace{0.3em}
 
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize},
+      col/.style={text width=4.3cm, align=left, anchor=north, font=\scriptsize},
+      head/.style={font=\scriptsize\bfseries, anchor=south}]
+    \node[head, text=realc] at (0, 0) {spqr-verify};
+    \node[head, text=proofc] at (4.8, 0) {this repository};
+    \node[head, text=refc] at (9.6, 0) {secure-messaging (SM)};
+    \node[col] at (0, -0.05) {%
+      Open, \#785 \code{send\_total}: a reachable send returns \code{Ok}.\\[2pt]
+      Open, \#787 \code{send\_refines\_tape}: the matching \code{Braid} step reads the same bytes
+      of $t$.};
+    \node[col] at (4.8, -0.05) {%
+      \code{codeSend\_eq\_some\_iff}: \code{some} iff \code{Ok}.\\[2pt]
+      \code{dropRng\_send\_prefix}: a send reads at most 64 bytes of $t$.\\[2pt]
+      \code{send\_chunked}: on the same $t$, the sends give related results.};
+    \node[col] at (9.6, -0.05) {%
+      \code{SPQR.Chunked.send} samples its own bytes. With \code{codeParams}, it also uses
+      \code{sampleTape}.};
+    \draw[trustc, dashed] (2.4, 0.3) -- (2.4, -1.6);
+    \draw[trustc, dashed] (7.2, 0.3) -- (7.2, -1.6);
+  \end{tikzpicture}
+  \vspace{-0.8em}
+
   \raggedright
   \begin{itemize}\footnotesize
-    \item Assumed, not proved: each send gets fresh, independent, uniform bytes.
-    \item Divergence $\mapsto$ \code{none} is a semantic choice. \code{send\_total} excludes it for honest sends.
+    \item Assumed, not in Lean: the real RNG acts like \code{sampleTape} on each Rust send
+      (slide \ref{fr:trust}).
+    \item Divergence maps to \code{none}, because a \code{ProbComp} must return a value.
+      \code{send\_total} rules it out on reachable sends.
   \end{itemize}
 \end{frame}
 
@@ -224,7 +231,7 @@ theorem code_correctness_error_le (hB : BridgeObligations)
     \node[impl, minimum width=2.6cm] (s) at (0, 0) {code state $s$};
     \node[spec, minimum width=2.6cm] (sg) at (5, 0) {\code{Braid} state $\sigma$};
     \node[spec, minimum width=2.6cm] (st) at (10, 0) {\code{Chunked} state $t$};
-    \draw[rel] (s) -- node[above, label, text=proofc] {\code{Refines}\\from PR \#781} (sg);
+    \draw[rel] (s) -- node[above, label, text=proofc] {\code{Refines}\\spqr-verify} (sg);
     \draw[rel] (sg) -- node[above, label, text=proofc] {\code{ChunkedRel}\\this repository} (st);
     \draw[decorate, decoration={brace, mirror, amplitude=6pt}, proofc, thick]
       (s.south west) ++(0,-0.2) -- ($(st.south east)+(0,-0.2)$)
@@ -234,7 +241,7 @@ theorem code_correctness_error_le (hB : BridgeObligations)
 
   \begin{itemize}\footnotesize
     \item $RA$: a code state and an SM state are related through \code{Braid}. The code state
-      refines some \code{Braid} state $\sigma$ (PR \#781), and $\sigma$ is related to the SM state
+      refines some \code{Braid} state $\sigma$ (spqr-verify), and $\sigma$ is related to the SM state
       (\code{ChunkedRel}). Both parties use it.
     \item \code{ChunkedRel}: the same of the eleven states, equal epochs and authenticators, byte
       fields as typed values, equal decoders, and each code encoder's \code{u32} counter is SM's counter modulo $2^{32}$. The header that
@@ -246,37 +253,16 @@ theorem code_correctness_error_le (hB : BridgeObligations)
 \end{frame}
 
 % ---------------------------------------------------------------- 5
-\begin{frame}[t]{Where the models differ: the erasure decoders}
-  \vspace{2.0em}
-  \centering
-  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
-    \node[spec, text width=4.2cm] (sm) at (0, 0) {\textbf{SM decoder}\\a set of chunks,\\decoded as a set};
-    \node[impl, text width=6cm] (rs) at (8, 0) {\textbf{Rust decoder}\\skips points as they arrive,\\so its state depends on the order};
-    \node[gap, text width=2.2cm] (g) at (3.6, 0) {different\\interfaces};
-    \draw[gapc, dashed, thick] (sm) -- (g) -- (rs);
-  \end{tikzpicture}
-  \vspace{1.6em}
+\begin{frame}[t]{The Rust decoder meets SM's decoder law}
+  \footnotesize
+  SM's machines are generic in a \code{StreamDecoder}. SM's own decoder decodes a set of chunks.
+  The Rust decoder skips points as they arrive, so its state depends on the order. SM's proofs
+  need one law, \code{Lawful}: adding a chunk of $p$ to a decoder that is honest for $p$ keeps it
+  honest, and it then decodes nothing or $p$.
+  \vspace{0.2em}
 
-  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
-    \node[proof, text width=12.5cm, align=flush left, font=\scriptsize] {%
-      \textbf{The change, in SM:} make the machines generic in a \code{StreamDecoder}
-      (\code{empty}, \code{addChunk}, \code{decodedPayload}, \code{Honest}).\\[2pt]
-      The proofs need two laws only:
-      \begin{itemize}
-        \item the empty decoder is honest for every payload;
-        \item adding a chunk of $p$ to a decoder honest for $p$ keeps it honest, and it then decodes
-          nothing or $p$ (\code{Lawful}).
-      \end{itemize}
-      SM's set decoder is an instance. The generic theorems take the law as a premise, and the
-      concrete v1 bound keeps its statement.};
-  \end{tikzpicture}
-\end{frame}
-
-% ---------------------------------------------------------------- 6
-\begin{frame}[t]{The Rust decoder is lawful}
-  \vspace{0.9em}
   \centering
-  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+  \begin{tikzpicture}[scale=0.65, every node/.append style={font=\scriptsize}]
     \draw[->, ink!50] (0,0) -- (6,0) node[right] {$x$};
     \draw[->, ink!50] (0,0) -- (0,2.4) node[above] {$y$};
     \draw[thick, refc, domain=0.2:5.8, samples=60] plot (\x, {1.1 + 0.6*sin(\x*65)});
@@ -286,16 +272,17 @@ theorem code_correctness_error_le (hB : BridgeObligations)
     \node[label, text=refc, anchor=west] at (6.2, 1.6) {codeword polynomial of $p$};
     \node[label, text=realc, anchor=west] at (6.2, 0.8) {stored points};
   \end{tikzpicture}
-  \vspace{0.6em}
+  \vspace{0.3em}
 
+  \raggedright
   \begin{itemize}\footnotesize
     \item The payload $p$ gives 16 slot polynomials over $\mathrm{GF}(2^{16})$, each of degree
-      $< K$. The plot is only an illustration.
-    \item Honest state: every stored point lies on the slot polynomial of $p$.
-    \item An honest chunk adds a point of the same polynomial, or is skipped.
-    \item $K$ points with distinct $x$ determine a polynomial of degree $< K$, so a decoded value is $p$.
+      $< K$.
+    \item Honest state: every stored point lies on the slot polynomial of $p$. An honest chunk
+      adds a point of the same polynomial, or is skipped.
+    \item $K$ points with distinct $x$ fix a polynomial of degree $< K$, so a decoded value is $p$.
     \item \code{polyStreamDecoder\_lawful}: one theorem for the four streams, $K \in \{3, 36, 30, 5\}$.
-    \item The law is safety only. A decoder that never decodes also meets it, so no liveness follows.
+    \item The law is safety only: a decoder that never decodes meets it too.
   \end{itemize}
 \end{frame}
 
@@ -398,7 +385,7 @@ theorem code_correctness_error_le (hB : BridgeObligations)
 \end{frame}
 
 % ---------------------------------------------------------------- 11
-\begin{frame}[t]{What the theorem trusts}
+\begin{frame}[t]{What the theorem trusts}\label{fr:trust}
   \vspace{0.2em}
   \centering
   \begin{tikzpicture}[
@@ -435,8 +422,8 @@ theorem code_correctness_error_le (hB : BridgeObligations)
   \begin{tabular}{l l l}
     \textbf{piece} & \textbf{where} & \textbf{status} \\
     \hline
-    code refines \code{Braid} & spqr-verify, PR \#781 & proved, one direction \\
-    generic stream decoders & SM, \code{la/generic-decoder} & proved, to propose \\
+    code refines \code{Braid} & spqr-verify & proved, one direction \\
+    generic stream decoders & SM & proved, merged \\
     \code{Braid} related to \code{SPQR.Chunked} & this repository & proved, every arm \\
     Rust decoder is lawful & this repository & proved \\
     transfer of the bound & this repository & proved, for $q + 2 < 2^{64}$ \\
@@ -453,7 +440,6 @@ theorem code_correctness_error_le (hB : BridgeObligations)
     \node[proof, text width=12.5cm, align=flush left, font=\scriptsize]
       {\textbf{Next}
        \begin{itemize}
-         \item Propose the generic stream decoder to secure-messaging.
          \item Build the exact \code{BridgeObligations} record from upstream theorems (\#785,
            \#786, \#787). Closing an issue is not enough if its statement differs.
          \item Bound $\varepsilon$: the \#788 workaround, the \code{sampleNTT} cap (\#799), and a
