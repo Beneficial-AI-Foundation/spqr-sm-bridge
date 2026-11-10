@@ -12,7 +12,6 @@ These statements make sure that `fit` and `pick` hide no mismatch with the code.
 
 * Primitives: where `fit` is the identity, and where each total field agrees with the
   code.
-* Tape: which bytes a `send` reads, and the elimination of unused sampling.
 * Game invariant: `CodeGameInv` holds initially, every query keeps it, and it bounds the
   epochs. At the receive boundary `nA + nB = Bud`, the epoch argument uses
   `epoch_bound_strong`, not `epoch_budget`.
@@ -51,9 +50,8 @@ theorem encaps2_agree (ek es ct2 : alloc.vec.Vec Std.U8) (hdr : Bytes)
     codePrims.encaps2 es.val hdr ek.val = ct2.val ∧ ct2.length = 128 := by
   exact ⟨codePrims_agreesSeeded.encaps2 ek es ct2 hdr h, encaps2_ok_length ek es ct2 h⟩
 
-/-- On a 2080-byte state and a 1152-byte vector, the code's `encaps2` succeeds. This is the
-success part of #788. It says nothing about the value: the workaround in `encaps2` may return
-any 2080-byte state. -/
+/-- Let `ek.length = 1152` and `es.length = 2080`. Then `incremental_mlkem768.encaps2 ek es = ok ct2`
+for some `ct2`. The statement gives no property of `ct2`. This is the success part of #788. -/
 theorem encaps2_ok (ek es : alloc.vec.Vec Std.U8) (hek : ek.length = 1152)
     (hes : es.length = 2080) : ∃ ct2, incremental_mlkem768.encaps2 ek es = ok ct2 := by
   exact exists_ok_of_spec (incremental_mlkem768.encaps2_spec ek es hek hes)
@@ -71,41 +69,11 @@ theorem kdfOK_agree (k : B 32) (ep : Std.U64) :
   rw [kdfOKTotal, codePrims_agreesSeeded.kdfOk k.1 ep]
   exact fit_of_length (crypto.hkdf_length _ _ _ _)
 
-/-- On inputs of at most `u32::MAX` bytes, the MAC has 32 bytes. So `fit 32` is the identity on
-the MACs of `codeAuth`, whose inputs are short. The bound is the one of the HMAC axiom
-`hmac_sha256_tag32_spec`: past it the Rust glue panics, and no axiom says that `hmac`
-succeeds. -/
+/-- Let `k.length ≤ u32::MAX` and `d.length ≤ u32::MAX`. Then `codePrims.mac k d` has 32 bytes.
+The two bounds are the premises of the HMAC axiom `hmac_sha256_tag32_spec`. -/
 theorem mac_length (k d : Bytes) (hk : k.length ≤ Std.U32.max) (hd : d.length ≤ Std.U32.max) :
     (codePrims.mac k d).length = 32 :=
   mac_length_u32 k d hk hd
-
-/-! ## Tape -/
-
-/-- The states whose `send` samples: key generation and `Encaps1`. -/
-def Samples : States → Prop
-  | .KeysUnsampled _ | .HeaderReceived _ => True
-  | _ => False
-
-/-- A `send` that does not sample ignores the tape. -/
-theorem codeSend_tape_irrel (s : States) (hs : ¬ Samples s) (t t' : List Std.U8) :
-    codeSend s t = codeSend s t' := by
-  refine codeSend_congr s s t t' (dropRng_send_irrel s ?_ ?_ t t')
-  · rintro st rfl; exact hs trivial
-  · rintro st rfl; exact hs trivial
-
-/-- A `send` reads at most the first 64 bytes of a tape of at least 64 bytes. This is the
-adapter between the fresh 64-byte tape of `codeScheme` and the single infinite tape of #787:
-the result does not change when bytes are appended. -/
-theorem codeSend_prefix (s : States) (t t' : List Std.U8) (ht : 64 ≤ t.length)
-    (ht' : 64 ≤ t'.length) (h : t.take 64 = t'.take 64) : codeSend s t = codeSend s t' := by
-  exact codeSend_congr s s t t' (dropRng_send_prefix s t t' ht ht' h)
-
-/-- Sampling a tape and ignoring it couples with a pure value. Used in the branches of
-`Chunked.send` that do not sample. -/
-theorem relTriple_sampleTape_pure {α β : Type} (f : B 64 → α) (b : β) (R : α → β → Prop)
-    (h : ∀ t, R (f t) b) :
-    RelTriple (do let t ← sampleTape; pure (f t)) (pure b : ProbComp β) R := by
-  exact relTriple_bind_pure_right sampleTape f b R h
 
 /-! ## Game invariant -/
 
@@ -120,9 +88,13 @@ theorem codeGameInv_pres (sampleInitKey : ProbComp InitKey) :
     QueryImpl.PreservesInv (sckaCorrectnessImpl (codeScheme sampleInitKey)) CodeGameInv :=
   codeGameInvRaw_pres sampleInitKey
 
-/-- `CodeGameInv` bounds the epochs by the send count: a party epoch by `nA + nB + 1`, and a
-recorded message's epoch by `nA + nB`. At `nA + nB ≤ 2^64 - 2`, the second bound gives every
-recorded message epoch plus one below `2^64`. (From `epoch_bound_strong`.) -/
+/-- Let `s : GameState States States (B 32) Message` satisfy `CodeGameInv s`. Then
+`s.stA.epochOf.val ≤ s.nA + s.nB + 1` and `s.stB.epochOf.val ≤ s.nA + s.nB + 1`. For every `n`,
+`m` and `t`, if `s.msgA n = some (m, t)` or `s.msgB n = some (m, t)`, then
+`m.epoch.val ≤ s.nA + s.nB`.
+
+Consequence: if `s.nA + s.nB ≤ 2^64 - 2`, then `m.epoch.val + 1 < 2^64` for every recorded
+message `m`. -/
 theorem codeGameInv_epochs (s : GameState States States (B 32) Message) (h : CodeGameInv s) :
     s.stA.epochOf.val ≤ s.nA + s.nB + 1 ∧ s.stB.epochOf.val ≤ s.nA + s.nB + 1 ∧
       ∀ n m t, (s.msgA n = some (m, t) ∨ s.msgB n = some (m, t)) →
@@ -131,8 +103,7 @@ theorem codeGameInv_epochs (s : GameState States States (B 32) Message) (h : Cod
 
 /-! ## Upstream adapters -/
 
-/-- A reachable code state refines some machine state. This adapts #784's invariant to
-`ReachParty`. It follows from `init_refines` and `run_refines`. -/
+/-- Assume `MlkemSizes`. Let `ReachParty s n`. Then `Refines s σ` for some `σ`. -/
 theorem reachParty_refines (hsz : MlkemSizes) (s : States) (n : ℕ) (h : ReachParty s n) :
     ∃ σ, Refines s σ := by
   obtain ⟨P, hP⟩ := codeAgrees_exists
@@ -140,11 +111,12 @@ theorem reachParty_refines (hsz : MlkemSizes) (s : States) (n : ℕ) (h : ReachP
   suffices hAB : (∃ σ, Refines sA σ) ∧ ∃ σ, Refines sB σ by
     rcases hs with rfl | rfl
     exacts [hAB.1, hAB.2]
-  have hsend : ∀ (s : States) (tape : List Std.U8) (out : v1.chunked.states.Send),
-      codeSend s tape = some out → (∃ σ, Refines s σ) → ∃ σ, Refines out.state σ := by
-    rintro s tape out hout ⟨σ, hσ⟩
+  have hsend : ∀ (s : States) (buf : Slice Std.U8) (out : v1.chunked.states.Send),
+      codeSend s buf = some out → (∃ σ, Refines s σ) → ∃ σ, Refines out.state σ := by
+    rintro s buf out hout ⟨σ, hσ⟩
     obtain ⟨rng', hs'⟩ := codeSend_some hout
-    obtain ⟨r, hr', -⟩ := send_refines P hP tapeRng tapeCrypto s σ hσ tape rng' out hs'
+    obtain ⟨r, hr', -⟩ :=
+      send_refines P hP (fixedRng buf) (fixedCrypto buf) s σ hσ () rng' out hs'
     exact ⟨_, hr'⟩
   have hrecv : ∀ (s : States) (msg : Message) (out : v1.chunked.states.Recv),
       codeRecv s msg = some out → (∃ σ, Refines s σ) → ∃ σ, Refines out.state σ := by
@@ -156,14 +128,13 @@ theorem reachParty_refines (hsz : MlkemSizes) (s : States) (n : ℕ) (h : ReachP
   | init k =>
     exact ⟨⟨_, (init_refines P hP k.1).1 _ (init_a_eq k)⟩,
       ⟨_, (init_refines P hP k.1).2 _ (init_b_eq k)⟩⟩
-  | sendA tape out _ hout ih => exact ⟨hsend _ tape out hout ih.1, ih.2⟩
-  | sendB tape out _ hout ih => exact ⟨ih.1, hsend _ tape out hout ih.2⟩
+  | sendA buf out _ _ hout ih => exact ⟨hsend _ buf out hout ih.1, ih.2⟩
+  | sendB buf out _ _ hout ih => exact ⟨ih.1, hsend _ buf out hout ih.2⟩
   | recvA m out _ _ hout ih => exact ⟨hrecv _ m out hout ih.1, ih.2⟩
   | recvB m out _ _ hout ih => exact ⟨ih.1, hrecv _ m out hout ih.2⟩
 
-/-- A stale message leaves the state unchanged and outputs no key. This is the stale half of
-the split that `recv_complete` needs: #785 bounds the state epoch, the bridge bounds the
-message epoch, and a stale message needs no headroom. -/
+/-- Let `msg.epoch < s.epochOf`. Then `codeRecv s msg = some { key := none, state := s }`. The
+statement has no bound on the epochs. -/
 theorem codeRecv_stale (s : States) (msg : Message) (h : msg.epoch.val < s.epochOf.val) :
     codeRecv s msg = some { key := none, state := s } := by
   simp only [codeRecv, recv_of_lt s msg h]
@@ -171,8 +142,10 @@ theorem codeRecv_stale (s : States) (msg : Message) (h : msg.epoch.val < s.epoch
 
 /-! ## Decoder -/
 
-/-- On an honest decoder state, the wrapper's `addChunk` of an honest chunk is the code's
-`add_chunk`, which succeeds. (From `add_chunk_ok`.) -/
+/-- Let `hK : 0 < K`, `hKN : K ≤ 2 ^ 16` and `cd : L2.Codec M K`. Let `d` be honest for `p` in
+`L2.polyStreamDecoder K hKN cd`, and let `c = (L2.ecp K hK hKN cd).encode p i`. Then the code's
+`add_chunk d (L2.toChunk c.1 c.2)` returns `ok d'` for some `d'`, and `addChunk d c = d'` in
+`L2.polyStreamDecoder`. -/
 theorem polyStreamDecoder_addChunk_code {M : Type} (K : ℕ) (hK : 0 < K) (hKN : K ≤ 2 ^ 16)
     (cd : L2.Codec M K) (d : (L2.polyStreamDecoder K hKN cd).D) (p : M) (i : ℕ)
     (hd : (L2.polyStreamDecoder K hKN cd).Honest d p) :
@@ -188,8 +161,10 @@ theorem polyStreamDecoder_addChunk_code {M : Type} (K : ℕ) (hK : 0 < K) (hKN :
   simp only [L2.polyStreamDecoder, hd']
   rfl
 
-/-- On an honest decoder state, the code's `decoded_message` succeeds, and the wrapper's
-`decodedPayload` is its parsed result. (From `decoded_message_ok`.) -/
+/-- Let `hKN : K ≤ 2 ^ 16` and `cd : L2.Codec M K`. Let `d` be honest for `p` in
+`L2.polyStreamDecoder K hKN cd`. Then the code's `decoded_message d` returns `ok r` for some `r`,
+and `decodedPayload d = r.bind fun v => cd.parse (L2.unflatten K v.val)` in
+`L2.polyStreamDecoder`. -/
 theorem polyStreamDecoder_decoded_code {M : Type} (K : ℕ) (hKN : K ≤ 2 ^ 16)
     (cd : L2.Codec M K) (d : (L2.polyStreamDecoder K hKN cd).D) (p : M)
     (hd : (L2.polyStreamDecoder K hKN cd).Honest d p) :

@@ -32,15 +32,15 @@ abbrev smInv (ik : InitKey) (s : GameState SMState SMState (B 32) (SPQR.Chunked.
     Prop :=
   MLKEMBraid.CorrectnessInv codeAuth ik (SPQR.GameState.toMLKEMBraid s) ∧ SPQR.Ct1AckInv s
 
-/-- A party of a game state with `CodeGameInv` is reachable with the game's send count. -/
+/-- Let `CodeGameInv s`. Then `ReachParty s.stA (s.nA + s.nB)` and
+`ReachParty s.stB (s.nA + s.nB)`. -/
 theorem reachParty_of_codeGameInv {s : GameState States States (B 32) Message}
     (h : CodeGameInv s) : ReachParty s.stA (s.nA + s.nB) ∧ ReachParty s.stB (s.nA + s.nB) := by
   obtain ⟨mA, mB, hr, -, -⟩ := h
   exact ⟨⟨_, _, mA, mB, hr, Or.inl rfl⟩, ⟨_, _, mA, mB, hr, Or.inr rfl⟩⟩
 
-/-- Let a game state have `CodeGameInv`. A message in B's transit array is a message that B sent
-in the game's run, so `ReachRecv` holds for A and that message. The same holds with the parties
-swapped. -/
+/-- Let `CodeGameInv s`. If `s.msgB n = some (ρ, tsnd)`, then `ReachRecv s.stA ρ (s.nA + s.nB)`.
+If `s.msgA n = some (ρ, tsnd)`, then `ReachRecv s.stB ρ (s.nA + s.nB)`. -/
 theorem reachRecv_of_codeGameInv {s : GameState States States (B 32) Message}
     (h : CodeGameInv s) {n tsnd : ℕ} {ρ : Message} :
     (s.msgB n = some (ρ, tsnd) → ReachRecv s.stA ρ (s.nA + s.nB)) ∧
@@ -49,8 +49,9 @@ theorem reachRecv_of_codeGameInv {s : GameState States States (B 32) Message}
   exact ⟨fun hm => ⟨_, _, mA, mB, hr, .inl ⟨rfl, mem_of_recorded hB hm⟩⟩,
     fun hm => ⟨_, _, mA, mB, hr, .inr ⟨rfl, mem_of_recorded hA hm⟩⟩⟩
 
-/-- The code meets the budgeted obligations against secure-messaging's SPQR scheme, with budget
-`2^64 - 2`. -/
+/-- Assume `BridgeObligations`. Then `codeScheme sampleInitKey` and `smScheme sampleInitKey` meet
+`BudgetedTransferObligations` with the invariants `smInv` and `CodeGameInv`, the relations `RA`
+and `RM`, and the budget `2 ^ 64 - 2`. -/
 theorem codeBudgetedObligations (hB : BridgeObligations) (sampleInitKey : ProbComp InitKey) :
     BudgetedTransferObligations (codeScheme sampleInitKey) (smScheme sampleInitKey) smInv
       CodeGameInv RA RA RM (2 ^ 64 - 2) where
@@ -77,11 +78,13 @@ theorem codeBudgetedObligations (hB : BridgeObligations) (sampleInitKey : ProbCo
     exact receive_chunked hB s₁.stB _ s₂.stB ρ₁ ρ₂ ((reachRecv_of_codeGameInv hinv).2 h₁)
       (by omega) hrel.stB hρ
 
-/-- Assume the allowed assumptions. Let `sampleInitKey` sample initial keys that the code
-accepts. Then every SCKA correctness adversary with at most `q` sends, across both parties,
-breaks some correctness assert on the code's chunked `States` machine with probability at most
-`q` times the correctness error of the code's KEM. The premise `BridgeObligations` is what makes
-this conditional: its fields go away once #782 is done. -/
+/-- Assume `BridgeObligations`. Let `sampleInitKey` be a sampler of `InitKey`, let `adv` be an
+SCKA correctness adversary with `SendQueryBound adv q`, and let `q + 2 < 2 ^ 64`. Then the
+probability that `correctnessExp (codeScheme sampleInitKey) adv` does not return `true` is at most
+`(q : ℝ≥0∞) * codeKem.correctnessError ProbCompRuntime.probComp`.
+
+The scheme `codeScheme` answers each `fill_bytes` call with `unifImpl`. The statement gives no
+bound for another RNG. -/
 theorem code_correctness_error_le (hB : BridgeObligations) (sampleInitKey : ProbComp InitKey)
     (adv : SCKACorrectnessAdversary Message) (q : ℕ)
     (hq : SendQueryBound adv q) (hq64 : q + 2 < 2 ^ 64) :
