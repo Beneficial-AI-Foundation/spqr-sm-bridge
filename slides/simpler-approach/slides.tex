@@ -1,0 +1,266 @@
+% SpqrBridge slides, alternatives.
+% Build: latexmk -lualatex slides.tex
+\input{../common/preamble}
+
+\title{Is there a simpler approach?}
+\subtitle{SpqrBridge slides, alternatives}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \centering
+  {\footnotesize\textcolor{trustc}{Can we map \code{send}, \code{recv} and \code{init} function by function, with no state machine?}}
+\end{frame}
+
+\begin{frame}[t]{Can we map \code{send} to \code{send}, and stop there?}\label{fr:square}
+  \footnotesize
+  \code{send\_chunked} is that mapping, from the extracted \code{send} to
+  \code{SPQR.Chunked.send}. Its statement needs three facts about states.
+
+  \centering
+  \begin{tikzpicture}[scale=0.8, transform shape, every node/.append style={font=\scriptsize}]
+    % one square
+    \node[impl, minimum width=1.5cm] (s) at (0, 1.0) {$s$};
+    \node[impl, minimum width=1.5cm] (s') at (4.2, 1.0) {$s',\ m,\ k$};
+    \node[spec, minimum width=1.5cm] (t) at (0, -0.6) {$t$};
+    \node[spec, minimum width=1.5cm] (t') at (4.2, -0.6) {$t',\ m',\ k'$};
+    \draw[flow, realc] (s) -- node[above, label, text=realc] {code \code{send}} (s');
+    \draw[flow, refc] (t) -- node[below, label, text=refc] {\code{Chunked.send}} (t');
+    \draw[rel] (s) -- node[left, label, text=proofc] {$RA$} (t);
+    \draw[rel] (s') -- node[right, label, text=proofc] {$RA$, $RM$, $=$} (t');
+
+    \node[gap, font=\scriptsize, text width=6.4cm, align=left, anchor=west] (p1) at (6.6, 1.2)
+      {\textbf{1.} $RA\ s\ t$: related inputs. The types differ, so equality is not possible.};
+    \node[gap, font=\scriptsize, text width=6.4cm, align=left, anchor=west] (p2) at (6.6, 0.25)
+      {\textbf{2.} \code{ReachParty} $s$: a run from \code{init} ends in $s$.};
+    \node[gap, font=\scriptsize, text width=6.4cm, align=left, anchor=west] (p3) at (6.6, -0.55)
+      {\textbf{3.} The epoch of $s$ is below the \code{u64} limit.};
+  \end{tikzpicture}
+
+  \begin{tikzpicture}[scale=0.8, transform shape, every node/.append style={font=\scriptsize},
+      c/.style={impl, minimum width=0.8cm, minimum height=0.5cm, inner sep=2pt},
+      m/.style={spec, minimum width=0.8cm, minimum height=0.5cm, inner sep=2pt}]
+    \foreach \i/\l in {0/{s_0}, 1/{s_1}, 2/{s_2}, 3/{s_3}, 4/{s_4}} {
+      \node[c] (c\i) at (2.3*\i, 0.5) {$\l$};
+    }
+    \foreach \i/\l in {0/{t_0}, 1/{t_1}, 2/{t_2}, 3/{t_3}, 4/{t_4}} {
+      \node[m] (m\i) at (2.3*\i, -0.5) {$\l$};
+      \draw[rel] (c\i) -- (m\i);
+    }
+    \foreach \i/\j/\l in {0/1/send, 1/2/recv, 2/3/send, 3/4/recv} {
+      \draw[flow, realc] (c\i) -- node[above, label, text=realc] {\l} (c\j);
+      \draw[flow, refc] (m\i) -- node[below, label, text=refc] {\l} (m\j);
+    }
+    \node[label, text=trustc, anchor=east] at (-0.7, 0.5) {\code{init}};
+    \node[label, text=trustc, anchor=east] at (-0.7, -0.5) {\code{init}};
+    \node[label, text=proofc, anchor=west] at (9.9, 0) {$RA$ is the\\induction\\hypothesis};
+  \end{tikzpicture}
+  \vspace{0.2em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item The output of a send depends on its input state, and that state depends on the earlier
+      calls. So the proof carries $RA$ from \code{init} to step $n$.
+    \item One square for each function, chained along a run, is a simulation between two state
+      machines. The per-function mapping is one step of it.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{The mapping holds on reachable states only}\label{fr:reach}
+  \footnotesize
+  For an arbitrary pair of related states, the square of slide \ref{fr:square} is false or not
+  claimed. The premises that repair it are facts about runs.
+
+  \centering
+  \begin{tikzpicture}[scale=0.78, transform shape, every node/.append style={font=\scriptsize}]
+    \draw[trustc, thick, rounded corners=8pt, fill=trustc!6] (-6.9, -2.3) rectangle (6.9, 2.3);
+    \node[label, text=trustc, anchor=north west] at (-6.8, 2.25) {all values of the type \code{States}};
+    \draw[proofc, very thick, fill=proofc!10] (0, -0.15) ellipse (2.7cm and 1.45cm);
+    \node[label, text=proofc] at (0, 0.85) {\textbf{reachable}: \code{CodeReach}};
+    \node[impl, inner sep=2pt, font=\tiny] (i) at (-1.7, -0.2) {\code{init}};
+    \node[impl, inner sep=2pt, font=\tiny] (a) at (-0.55, -0.2) {$s_1$};
+    \node[impl, inner sep=2pt, font=\tiny] (b) at (0.55, -0.2) {$s_2$};
+    \node[impl, inner sep=2pt, font=\tiny] (c) at (1.7, -0.2) {$s_3$};
+    \draw[flow, realc] (i) -- (a);
+    \draw[flow, realc] (a) -- (b);
+    \draw[flow, realc] (b) -- (c);
+    \node[label, text=proofc] at (0, -0.95) {the squares hold here};
+
+    \node[gap, font=\scriptsize, text width=3.5cm, align=left] (g1) at (-4.8, 0.85)
+      {epoch $= 2^{64} - 1$:\\the code refuses,\\SM continues (main deck)};
+    \node[gap, font=\scriptsize, text width=3.5cm, align=left] (g2) at (-4.8, -1.15)
+      {a state that no run produces:\\no claim about \code{send}\\(\#785, \#787)};
+    \node[gap, font=\scriptsize, text width=3.5cm, align=left] (g3) at (4.8, 0.85)
+      {a message that the other\\party never sent:\\no claim about \code{recv}};
+    \node[gap, font=\scriptsize, text width=3.5cm, align=left] (g4) at (4.8, -1.15)
+      {SM refuses a message:\\the code can do anything};
+  \end{tikzpicture}
+  \vspace{0.2em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item \code{CodeReach} is inductive over \code{init}, \code{send} and \code{recv} of both
+      parties. Without the machine, ``reachable'' has no meaning.
+    \item The receive premise needs both parties: the message is in the list that the
+      \emph{other} party sent in the same run (\code{ReachRecv}).
+    \item The bottom-right case is reachable. The game permits it, because SM's game failed
+      already. An equality of two functions cannot state this.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{What needs states, and what is a choice}
+  \vspace{0.6em}
+  \centering
+  \scriptsize
+  \renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{>{\raggedright\arraybackslash}p{4.6cm} p{2.1cm} >{\raggedright\arraybackslash}p{6.6cm}}
+    \textbf{piece} & \textbf{needed?} & \textbf{why} \\
+    \hline
+    a relation between code states and SM states ($RA$)
+      & \textcolor{gapc}{yes} & the types differ, and \code{send} takes a state and returns one
+      (slide \ref{fr:square}) \\
+    a reachability invariant (\code{CodeReach})
+      & \textcolor{gapc}{yes} & the step facts fail or are not claimed outside it
+      (slide \ref{fr:reach}) \\
+    a game-level argument (invariant, potential)
+      & \textcolor{gapc}{yes} & the property is about runs of two parties
+      (run deck) \\
+    a state map for corruptions (\code{conc})
+      & \textcolor{gapc}{for security} & the adversary reads the state
+      (run deck) \\
+    \code{Braid} between the code and SM
+      & \textcolor{proofc}{a choice} & one direct relation is possible (route A, next slides) \\
+    the eleven named states
+      & \textcolor{proofc}{not ours} & the Rust type \code{States} is an enum, and
+      \code{send} matches on it \\
+  \end{tabular}
+  \vspace{0.3em}
+
+  \raggedright\footnotesize
+  \begin{itemize}
+    \item The proposal ``map \code{send} to \code{send}, \code{recv} to \code{recv}, \code{init}
+      to \code{init}'' is route A. It removes \code{Braid}. It keeps the first four rows.
+    \item The bridge already contains that mapping: \code{send\_chunked}, \code{receive\_chunked}
+      and the \code{init} obligation. The transfer theorem takes exactly these three as input.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{Two routes from SM's bound to the code}
+  \footnotesize
+  SM proves its bound for the game over \code{SPQR.Chunked}. To move it, relate each state of the
+  code's game to a state of SM's game, step by step.
+  \vspace{0.1em}
+
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+    \node[impl, minimum width=3.0cm] (c) at (0, 0) {\textbf{code}\\extracted \code{States}};
+    \node[spec, minimum width=3.0cm] (k) at (9, 0) {\textbf{\code{SPQR.Chunked}}\\SM model};
+    \node[spec, minimum width=3.0cm] (b) at (4.5, 2.1) {\textbf{\code{Braid}}\\ML-KEM Braid, with\\the code's deviations};
+    \node[proof, below=0.7cm of k] (q) {$\Pr[\text{fail}] \le q\varepsilon$};
+    \draw[flow, proofc] (k) -- node[right, label, text=proofc] {SM proof} (q);
+
+    \draw[gapc, very thick, dashed] (c) -- node[below=4pt, label, text=gapc]
+      {\textbf{route A}: one direct relation} (k);
+
+    \draw[rel] (c) -- node[left=6pt, label, text=proofc, pos=0.5]
+      {\code{Refines}\\spqr-verify} (b.west);
+    \draw[rel] (b.east) -- node[right=6pt, label, text=proofc, pos=0.5]
+      {\code{ChunkedRel}\\this repository} (k);
+    \node[label, text=proofc] at (4.5, 0.75) {\textbf{route B}: through \code{Braid}};
+  \end{tikzpicture}
+  \vspace{0.3em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item Both routes must give one relation $RA$ between code states and SM states. Sends
+      are coupled, and receives keep it until SM fails.
+    \item Route B builds it as a composition through \code{Braid} (main deck).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{What a direct relation would have to prove}
+  \footnotesize
+  A step of route A relates one Rust step to one SM step. It mixes two kinds of facts.
+  \vspace{0.4em}
+
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+    \node[gap, minimum width=12.4cm] (a) at (0, 0)
+      {route A: \implside{one Rust step} $\sim$ \specside{one \code{SPQR.Chunked} step}};
+
+    \node[impl, text width=6.2cm, align=left, font=\scriptsize] (l) at (-3.45, -0.6) [anchor=north] {%
+      \textbf{about the code}
+      \begin{itemize}\scriptsize\setlength{\itemsep}{0pt}
+        \item \code{Result}: panics, divergence, \code{Err}
+        \item \code{u64} and \code{usize} bounds
+        \item bytes, slices, serialization
+        \item calls to ML-KEM, HKDF, HMAC
+        \item which random bytes each send reads
+      \end{itemize}};
+    \node[spec, text width=6.2cm, align=left, font=\scriptsize] (r) at (3.45, -0.6) [anchor=north] {%
+      \textbf{about the models}
+      \begin{itemize}\scriptsize\setlength{\itemsep}{0pt}
+        \item byte fields against typed values
+        \item epochs: \code{u64} against $\mathbb{N}$
+        \item streaming decoder against set decoder
+        \item encoder counter modulo $2^{32}$
+        \item deviations of the code from §2.5
+      \end{itemize}};
+    \draw[flow, gapc] (a.south -| l) -- (l);
+    \draw[flow, gapc] (a.south -| r) -- (r);
+
+    \node[proof, text width=6.2cm, font=\scriptsize, below=0.3cm of l] (lp)
+      {functional correctness: spqr-verify\\\code{Refines}, \#785, \#787};
+    \node[proof, text width=6.2cm, font=\scriptsize, below=0.3cm of r] (rp)
+      {model matching: this repository\\\code{ChunkedRel}};
+    \draw[flow, proofc] (l) -- (lp);
+    \draw[flow, proofc] (r) -- (rp);
+  \end{tikzpicture}
+  \vspace{0.4em}
+
+  \raggedright
+  Route A needs the left column too. It can reuse upstream lemmas, but it states each step
+  against SM's types. Route B states these facts once, against \code{Braid}. Totality and the
+  randomness fact are still premises there (\#785, \#787).
+\end{frame}
+
+\begin{frame}[t]{Why \code{Braid} in the middle}
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+    \node[spec, minimum width=2.8cm] (b) at (0, 0) {\textbf{\code{Braid}}\\one abstract\\machine};
+
+    \node[spec, minimum width=3.0cm] (p) at (-5.0, 1.1) {ML-KEM Braid §2.5\\(the paper)};
+    \node[impl, minimum width=3.0cm] (c) at (-5.0, -0.3) {code, v1.6.0};
+    \node[impl, minimum width=3.0cm, dashed] (c2) at (-5.0, -1.25) {next code version};
+    \node[spec, minimum width=3.0cm] (k) at (5.0, 1.1) {\code{SPQR.Chunked}\\SM correctness};
+    \node[spec, minimum width=3.0cm, dashed] (s) at (5.0, -0.15) {other SM models\\or security games};
+    \node[spec, minimum width=3.0cm, dashed] (o) at (5.0, -1.25) {other properties};
+
+    \draw[ink!60, thick, dotted] (p.east) -- node[above, sloped, label, text=ink!70, pos=0.6] {deviations named} (b.north west);
+    \draw[rel] (c.east) -- node[below, sloped, label, text=proofc, pos=0.55] {\code{Refines}} (b.west);
+    \draw[rel, proofc!40] (c2.east) -- (b.south west);
+    \draw[rel] (b.north east) -- node[above, sloped, label, text=proofc, pos=0.45] {\code{ChunkedRel}} (k.west);
+    \draw[rel, proofc!40] (b.east) -- (s.west);
+    \draw[rel, proofc!40] (b.south east) -- (o.west);
+
+    \node[label, text=realc] at (-5.0, -1.85) {code side: spqr-verify};
+    \node[label, text=refc] at (5.0, -1.85) {model side: bridges};
+  \end{tikzpicture}
+  \vspace{0.3em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item Each repository proves what it owns: facts about the Rust code next to the extraction,
+      facts about SM's model next to SM.
+    \item If \code{Braid}'s interface stays stable, a change on one side redoes one relation only:
+      a new code version redoes \code{Refines}, a new model needs a relation from \code{Braid}.
+    \item Security games are future work. They see leaked randomness, so the coupling must also relate
+      the bytes that each side leaks.
+    \item \code{Braid} reads like the paper, with each deviation named.
+    \item The cost: one more model to maintain. \code{ChunkedRel} still needs two code facts: the
+      Rust decoder is lawful, and the encoder counter wraps.
+  \end{itemize}
+\end{frame}
+
+\end{document}

@@ -1,0 +1,243 @@
+% SpqrBridge slides, the refinement in spqr-verify.
+% Build: latexmk -lualatex slides.tex
+\input{../common/preamble}
+
+\title{The extracted code refines the Braid machine}
+\subtitle{SpqrBridge slides, the refinement in spqr-verify}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \centering
+  {\footnotesize\textcolor{trustc}{What does spqr-verify prove about the extracted code, and what does it leave open?}}
+\end{frame}
+
+\begin{frame}[t]{From Rust to an abstract machine}
+  \vspace{0.2em}
+  \centering
+  \begin{tikzpicture}[scale=0.85, transform shape, every node/.append style={font=\scriptsize}]
+    \node[impl, text width=3.3cm] (rust) at (-0.3, 0) {\textbf{Rust}\\\code{chunked/states.rs}};
+    \node[impl, text width=4.2cm] (lean) at (5.2, 0) {\textbf{extracted \code{States}}\\\code{States.send}, \code{States.recv}\\return in \code{Result}};
+    \node[spec, text width=4.4cm] (braid) at (11.6, 0) {\textbf{\code{Braid}}\\\code{send}, \code{receive}:\\pure functions on eleven states};
+    \node[trust, text width=4.4cm] (prims) at (11.6, -2.0) {\code{Prims}: KEM, MAC, KDF,\\encoder and decoder, as parameters};
+    \node[proof, text width=4.2cm] (agree) at (5.2, -2.0) {\code{CodeAgrees P}: each primitive of $P$ is the code's own function};
+    \draw[flow] (rust) -- node[above, label] {Aeneas} (lean);
+    \draw[rel] (lean) -- node[above, label, text=proofc] {\code{Refines}} (braid);
+    \draw[flow, trustc] (prims) -- (braid);
+    \draw[rel] (agree) -- (prims);
+    \draw[rel] (agree) -- (lean);
+  \end{tikzpicture}
+  \vspace{0.3em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item \code{Braid} is the state machine of ML-KEM Braid §2.5, written by hand in Lean. It has
+      no \code{Result}, no machine integers and no RNG state. \code{send} takes the random bytes
+      as an argument.
+    \item \code{Braid} does not fix the cryptography. It takes a record \code{Prims}.
+      \code{CodeAgrees P} says that $P$ computes what the extracted functions compute, and
+      \code{codeAgrees\_exists} proves that such a $P$ exists.
+    \item The refinement theorems hold for every $P$ with \code{CodeAgrees P}. They say nothing
+      about what the primitives compute. That is the task of the proofs about libcrux.
+    \item The theorems are in spqr-verify, \code{Spqr/Specs/Braid/StateMachine}. The bridge
+      imports them.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{The machine: eleven states, thirteen transitions}
+  \centering
+  \begin{tikzpicture}[scale=0.78, transform shape, every node/.append style={font=\scriptsize},
+      st/.style={spec, inner sep=3pt, text width=2.3cm, minimum height=0.8cm, font=\scriptsize},
+      snd/.style={->, very thick, realc},
+      rcv/.style={->, thick, refc},
+      n/.style={label, fill=paper, inner sep=1pt, text=ink}]
+    \node[st] (ku) at (0, 1.1) {\code{keysUnsampled}};
+    \node[st] (ks) at (3.5, 1.1) {\code{keysSampled}};
+    \node[st] (hs) at (7.0, 1.1) {\code{headerSent}};
+    \node[st] (cr) at (10.5, 1.1) {\code{ct1Received}};
+    \node[st] (es) at (14.0, 1.1) {\code{ekSent}\\\code{Ct1Received}};
+    \node[st] (nh) at (14.0, -1.4) {\code{noHeader}\\\code{Received}};
+    \node[st] (hr) at (10.5, -1.4) {\code{headerReceived}};
+    \node[st] (cs) at (7.0, -1.4) {\code{ct1Sampled}};
+    \node[st] (ca) at (3.5, -0.8) {\code{ct1Acknowledged}};
+    \node[st] (er) at (3.5, -2.0) {\code{ekReceived}\\\code{Ct1Sampled}};
+    \node[st] (c2) at (0, -1.4) {\code{ct2Sampled}};
+    \draw[snd] (ku) -- node[n] {1} (ks);
+    \draw[rcv] (ks) -- node[n] {2} (hs);
+    \draw[rcv] (hs) -- node[n] {3} (cr);
+    \draw[rcv] (cr) -- node[n] {4} (es);
+    \draw[rcv] (es) -- node[n] {5} node[left=5pt, label, text=proofc] {key out, epoch $e + 1$} (nh);
+    \draw[rcv] (nh) -- node[n] {6} (hr);
+    \draw[snd] (hr) -- node[n] {7} node[below=5pt, label, text=proofc] {key out} (cs);
+    \draw[rcv] (cs.west) -- node[n] {8} (ca.east);
+    \draw[rcv] (cs.west) -- node[n] {10} (er.east);
+    \draw[rcv] (cs.south) -- ++(0, -1.35) -| node[n, pos=0.25] {9} (c2.south);
+    \draw[rcv] (ca.west) -- node[n] {11} (c2.east);
+    \draw[rcv] (er.west) -- node[n] {12} (c2.east);
+    \draw[rcv] (c2) -- node[n] {13} node[right=5pt, label, text=proofc] {epoch $e + 1$} (ku);
+    \node[label, text=trustc, anchor=south west] at (-1.3, 1.6) {top row: the party generates the key pair of epoch $e$};
+    \node[label, text=trustc, anchor=north east] at (15.3, -2.3) {bottom row: the party encapsulates in epoch $e$};
+  \end{tikzpicture}
+  \vspace{0.1em}
+
+  \scriptsize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}[t]{@{}>{\raggedright}p{2.6cm} >{\raggedright}p{5.0cm} >{\raggedright\arraybackslash}p{5.7cm}@{}}
+    \textcolor{realc}{\textbf{send}}, reads bytes &
+    \textcolor{refc}{\textbf{receive}}, top row &
+    \textcolor{refc}{\textbf{receive}}, bottom row \\
+    1 \code{KeyGen} & 2 first \code{ct1} chunk &
+      6 header complete, MAC correct \\
+    7 \code{Encaps1} & 3 \code{ct1} complete \quad 4 first \code{ct2} chunk &
+      8 ack, \code{ek} incomplete \quad 12 ack \\
+    & 5 \code{ct2} complete, MAC correct &
+      9 ack, \code{ek} complete \quad 10, 11 \code{ek} complete \\
+  \end{tabular}
+  \vspace{0.5em}
+
+  \raggedright\scriptsize
+  ack: \code{ct1} is acknowledged. 13: a message of epoch $e + 1$. Not drawn: a step that keeps the
+  state (every other \code{send} sends the next chunk, and a \code{receive} can complete nothing).
+\end{frame}
+
+\begin{frame}[t]{\code{Refines}: the same state, with equal values}
+  \vspace{0.3em}
+  \centering
+  \begin{tikzpicture}[scale=0.85, transform shape, every node/.append style={font=\scriptsize},
+      f/.style={box, inner sep=3pt, text width=3.4cm, minimum height=0.55cm, font=\scriptsize}]
+    \node[label, text=realc] at (0, 0.75) {code: \code{States.KeysSampled s}};
+    \node[label, text=refc] at (9.0, 0.75) {model: \code{keysSampled e a dk hdr ek enc}};
+    \foreach \i/\l/\r/\m in {
+        0/{\code{s.uc.epoch : U64}}/{\code{e : Nat}}/{\code{.val =}},
+        1/{\code{s.uc.auth}}/{\code{a : Auth}}/{\code{absAuth}},
+        2/{\code{s.uc.dk : Array U8}}/{\code{dk : Bytes}}/{\code{.val =}},
+        3/{\code{s.uc.ek : Array U8}}/{\code{ek : Bytes}}/{\code{.val =}},
+        4/{\code{s.sending\_hdr}}/{\code{enc : PolyEncoder}}/{\code{=}}} {
+      \node[f, draw=realc, fill=realc!8] (l\i) at (0, -0.65*\i) {\l};
+      \node[f, draw=refc, fill=refc!8] (r\i) at (9.0, -0.65*\i) {\r};
+      \draw[rel] (l\i) -- node[above=-2pt, label, text=proofc] {\m} (r\i);
+    }
+    \node[f, draw=refc, fill=refc!8, dashed] (r5) at (9.0, -3.25) {\code{hdr : Bytes}};
+    \node[label, text=trustc] at (0, -3.25) {not kept by the code here};
+    \node[label, text=trustc, anchor=west] at (11.0, -3.25) {free};
+  \end{tikzpicture}
+  \vspace{0.4em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item \code{Refines s σ} has one case for each of the eleven states. A pair of different
+      states is \code{False}. The model uses the code's own encoder and decoder types.
+    \item Five cases also fix sizes. Examples: the \code{ct2} decoder needs 80 points, and a
+      received \code{ct1} has 960 bytes.
+    \item The sizes are necessary. A \code{ct2} decoder that needs 65 points completes with a
+      130-byte message, and the code can accept its 2-byte MAC. The model refuses it.
+    \item So \code{Refines} holds on states that the code builds from \code{init}. A state
+      restored from bytes has no such proof.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{The refinement theorems}
+  \vspace{0.2em}
+  \centering
+  \begin{tikzpicture}[scale=0.85, transform shape, every node/.append style={font=\scriptsize}]
+    \node[impl, minimum width=1.5cm] (s) at (0, 1.2) {$s$};
+    \node[impl, minimum width=1.5cm] (s2) at (5.4, 1.2) {$s'$};
+    \node[spec, minimum width=1.5cm] (g) at (0, -0.8) {$\sigma$};
+    \node[spec, minimum width=1.5cm, dashed] (g2) at (5.4, -0.8) {$\sigma'$};
+    \draw[flow, realc] (s) -- node[above, label, text=realc] {code step returns \code{Ok}} (s2);
+    \draw[flow, refc, dashed] (g) -- node[below, label, text=refc] {\code{Braid} step} (g2);
+    \draw[rel] (s) -- node[left, label, text=proofc] {\code{Refines}} (g);
+    \draw[rel] (s2) -- node[right, label, text=proofc] {\code{Refines}} (g2);
+    \node[label, text=trustc, text width=5.8cm, align=left, anchor=west] at (7.4, 0.2) {%
+      Given: the solid parts.\\
+      Proved: the dashed parts exist, with the same message (\code{absMsg}) and the same key
+      (\code{absKey}).};
+  \end{tikzpicture}
+  \vspace{0.3em}
+
+  \footnotesize
+  \renewcommand{\arraystretch}{1.25}
+  \begin{tabular}{@{}>{\raggedright}p{2.6cm} >{\raggedright\arraybackslash}p{11.0cm}@{}}
+    \code{init\_refines} & \code{init\_a} and \code{init\_b} refine \code{initAlice} and
+      \code{initBob}. \\
+    \code{send\_refines} & If \code{States.send} returns \code{Ok}, then \code{Braid.send σ r}
+      matches it for some bytes $r$. \\
+    \code{recv\_refines} & If \code{States.recv} returns \code{Ok}, then \code{Braid.receive}
+      accepts the message and matches it. Needs \code{MlkemSizes}. \\
+    \code{run\_refines} & A run of the code from $s$ gives a run of \code{Braid} from $\sigma$
+      with the same keys, by induction on the run. \\
+  \end{tabular}
+  \vspace{0.3em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item The theorems go in one direction: from a successful code step to a model step. They do
+      not say that the code succeeds, and they do not name $r$.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{Three named deviations from §2.5}
+  \footnotesize
+  The code differs from ML-KEM Braid §2.5 in three places. \code{Braid} follows the code at each
+  one, so that the refinement holds. Each is a constructor of \code{Braid.Deviation}.
+  \vspace{0.2em}
+
+  \renewcommand{\arraystretch}{1.15}
+  \begin{tabular}{@{}>{\raggedright}p{2.9cm} >{\raggedright}p{4.9cm} >{\raggedright\arraybackslash}p{5.5cm}@{}}
+    & \specside{\textbf{§2.5}} & \implside{\textbf{code, and \code{Braid}}} \\
+    \hline
+    \code{futureEpochError} & A later-epoch message is ignored, except at transition 13. &
+      \code{recv} returns \code{Err(EpochOutOfRange)}, and the model returns \code{none}. \\
+    \code{ct1AckAccepted} & \code{EkSentCt1Received} sends a message of type \code{None}.
+      \code{Ct1Ack} is not used. &
+      It sends \code{Ct1Ack(true)}, and \code{EkReceivedCt1Sampled} takes transition 12 on it. \\
+    \code{lateEkChunk} & \code{Ct1Acknowledged} drops a plain \code{Ek} chunk. &
+      The chunk goes to the \code{ek} decoder, and can complete transition 11. \\
+  \end{tabular}
+  \vspace{0.3em}
+
+  \begin{itemize}\footnotesize
+    \item A declaration that follows the code at a deviation carries
+      \code{@[braid\_deviation …]}. A search for the tag gives every place.
+    \item The docstring of each constructor gives the effect in a normal run. That reasoning is
+      not proved.
+    \item SM's \code{SPQR.Chunked} has the same deviations. \code{lateEkChunk} is the reason that
+      \code{SPQR.correctness\_error\_le} relabels one delivery when it translates to Braid.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{What the refinement gives, and what is open}
+  \vspace{0.6em}
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize}]
+    \node[proof, text width=6.3cm, align=left, font=\scriptsize, anchor=north] (p) at (0, 0) {%
+      \textbf{proved in spqr-verify}\\[3pt]
+      \code{init\_refines}\\
+      \code{send\_refines}: for some bytes $r$\\
+      \code{recv\_refines}: with \code{MlkemSizes}\\
+      \code{run\_refines}\\[3pt]
+      Direction: the code succeeds $\Rightarrow$ the model steps.};
+    \node[gap, text width=6.3cm, align=left, font=\scriptsize, anchor=north] (o) at (7.4, 0) {%
+      \textbf{open, premises of the bridge}\\[3pt]
+      \code{mlkem\_sizes} (\#786): three libcrux sizes\\
+      \code{send\_total} (\#785): a reachable send succeeds\\
+      \code{recv\_complete} (\#785): the model accepts $\Rightarrow$\\\quad the code succeeds, with the same result\\
+      \code{send\_refines\_bytes} (\#787): $r$ is the RNG's answer};
+  \end{tikzpicture}
+  \vspace{0.8em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item The bridge composes \code{Refines} with its relation from \code{Braid} to
+      \code{SPQR.Chunked}: $RA\ s\ t \iff \exists \sigma,\ \code{Refines}\ s\ \sigma \wedge
+      \code{ChunkedRel}\ \sigma\ t$ (main deck, ``The chain of relations'').
+    \item The probability bound needs both directions. If the model accepts a message and the
+      code refuses it, the code's game fails where SM's game continues. \code{recv\_complete}
+      and \code{send\_total} close that direction on reachable states.
+    \item \code{send\_refines\_bytes} gives the distribution of $r$ (probability deck).
+    \item The four open facts are the fields of \code{BridgeObligations}.
+  \end{itemize}
+\end{frame}
+
+\end{document}
