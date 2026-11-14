@@ -1,0 +1,284 @@
+% SpqrBridge slides: SM's correctness proof for ML-KEM Braid, and its transport to SPQR.Chunked.
+% Build: latexmk -lualatex slides.tex
+\input{../common/preamble}
+
+\title{A tour of the ML-KEM Braid correctness proof in SM}
+\subtitle{Why the proof needs states and runs, not only \code{send} and \code{recv}}
+
+
+
+
+% Links: the docs site follows SM's main; the Lean links are at the commit that the bridge pins.
+\newcommand{\smdocs}{https://beneficial-ai-foundation.github.io/secure-messaging/Sparse-Continuous-Key-Agreement}
+\newcommand{\smlean}{https://github.com/Beneficial-AI-Foundation/secure-messaging/blob/c16e287c897b4f99bea7f9879abad338a2bf0618/SecureMessaging/SCKA}
+\newcommand{\links}[1]{\begin{tikzpicture}[remember picture, overlay]
+  \node[anchor=south east, font=\scriptsize, text=trustc, align=right]
+    at ([xshift=-1.0cm, yshift=0.35cm]current page.south east) {#1};
+\end{tikzpicture}}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \centering
+  {\footnotesize\textcolor{trustc}{The proof shown: \code{MLKEMBraid.correctness\_error\_le}.
+  Last slide: its transport to \code{SPQR.Chunked}.}}
+\end{frame}
+
+\begin{frame}[t]{What correctness means}\label{fr:meaning}
+  \footnotesize
+  \vspace{1.2em}
+  \begin{itemize}\footnotesize
+    \item ML-KEM Braid is an SCKA scheme. It is correct if it satisfies SCKA correctness.
+    \item Two parties, A and B, call \code{send} and \code{recv} to exchange messages. Some of
+      these calls output a key $(e, k)$ for an epoch $e$.
+    \item The network may drop, delay, reorder or replay messages. Both parties are honest.
+    \item SCKA correctness:
+      \begin{itemize}\footnotesize
+        \item every message that the other party sent is accepted;
+        \item A and B output the same key for each epoch;
+        \item each party outputs one key per epoch, for epochs $1, 2, 3, \ldots$ in order.
+      \end{itemize}
+    \item ML-KEM Braid satisfies it except with probability $q\varepsilon$: $q$ sends, each with
+      a KEM decapsulation failure probability $\varepsilon$.
+  \end{itemize}
+  \links{Docs: \href{\smdocs/SCKA-Definitions/\#--informal-preview-scka_correctness--statement}{SCKA protocol correctness (the definition)}}
+\end{frame}
+
+\begin{frame}[t]{The correctness game}\label{fr:game}
+  \footnotesize
+  \begin{itemize}\footnotesize
+    \item SM states correctness as a game, \code{correctnessExp}. The adversary plays the
+      network. The game returns the flag \code{correct}.
+  \end{itemize}
+
+  \centering
+  \vspace{1.2em}
+  \begin{tikzpicture}[scale=0.8, transform shape, every node/.append style={font=\scriptsize}]
+    \node[tool, minimum width=1.8cm, minimum height=2.6cm] (adv) at (-0.6, 0) {adversary};
+    \node[spec, minimum width=4.8cm, minimum height=2.6cm] (game) at (5.6, 0) {};
+    \node[label, text=refc, anchor=north] at (5.6, 1.25) {\textbf{game state}};
+    \node[impl, minimum width=2.0cm] at (4.4, 0.4) {state of A};
+    \node[impl, minimum width=2.0cm] at (6.8, 0.4) {state of B};
+    \node[label, anchor=west] at (3.4, -0.45) {messages sent: \code{msgA}, \code{msgB}};
+    \node[label, anchor=west] at (3.4, -0.85) {keys output: \code{keyA}, \code{keyB}};
+    \draw[flow] ([yshift=0.6cm]adv.east) -- node[above, label] {\code{SendA}, \code{SendB}}
+      ([yshift=0.6cm]game.west);
+    \draw[flow] ([yshift=-0.5cm]adv.east) -- node[above, label] {\code{RecvA}$(n)$, \code{RecvB}$(n)$}
+      ([yshift=-0.5cm]game.west);
+    \node[proof, text width=5.2cm, align=left, anchor=west, minimum height=2.6cm] at (8.3, 0)
+      {A failed assert sets \code{correct} to false.\\[0.3em]
+      Example, \emph{consistent keys}: A and B output the same key for $e$.};
+  \end{tikzpicture}
+  \vspace{1.2em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item \code{MLKEMBraid.correctness\_error\_le}: with at most $q$ sends,
+      $1 - \Pr[\code{correct}] \le q\varepsilon$.
+  \end{itemize}
+  \links{Lean: \href{\smlean/Defs.lean\#L799}{\code{correctnessExp}},
+    \href{\smlean/MLKEMBraid/Correctness.lean\#L93}{\code{MLKEMBraid.correctness\_error\_le}}.
+    Docs: \href{\smdocs/ML-KEM-Braid/\#--informal-preview-mlkem_braid_correctness--statement}{ML-KEM Braid correctness}}
+\end{frame}
+
+\begin{frame}[t]{ML-KEM Braid correctness is a property of a run}\label{fr:run}
+  \footnotesize
+  \centering
+  \vspace{0.6em}
+  \begin{tikzpicture}[scale=0.7, transform shape, every node/.append style={font=\scriptsize},
+      call/.style={impl, font=\scriptsize, inner sep=3pt, minimum width=2.4cm},
+      note/.style={trust, font=\scriptsize, inner sep=2pt, text width=2.8cm, align=flush left},
+      keyout/.style={proof, font=\scriptsize, inner sep=3pt},
+      msg/.style={->, thick, ink!70}]
+    \node[font=\small] at (0, 0.9) {A};
+    \node[font=\small] at (10, 0.9) {B};
+    \draw[gapc, thick] (2.4, 0.6) rectangle (7.6, -4.9);
+    \node[text=gapc, align=center] at (5, -3.2) {adversary: delays, reorders,\\drops, replays chunks};
+    % calls
+    \node[call] (kg) at (0, 0) {A: \code{send}\\KeyGen};
+    \node[call] (en) at (10, -2.1) {B: \code{send}\\Encaps};
+    \node[call] (de) at (0, -4.3) {A: \code{recv}\\Decaps};
+    % party lines
+    \draw[ink!40, thick] (kg) -- (de);
+    \draw[ink!40, thick] (10, 0.6) -- (en) -- (10, -4.9);
+    % chunk flows
+    \draw[msg] (kg.east) -- node[above, pos=0.65] {header chunks} (4.2, 0);
+    \draw[msg] (5.8, -0.9) -- (10, -0.9);
+    \draw[msg] (en.west) -- node[above, pos=0.6] {$\mathit{ct}$ chunks} (5.8, -2.1);
+    \draw[msg] (4.2, -4.3) -- (de.east);
+    % states
+    \node[note, anchor=east] (na) at (-1.6, -2.1) {A's state holds $\mathit{sk}$ and a partial decoder};
+    \draw[trustc, densely dotted] (na.east) -- (0, -2.1);
+    \node[note, anchor=west] (nb1) at (11.6, -0.6) {B's decoder collects the header};
+    \draw[trustc, densely dotted] (nb1.west) -- (10, -0.6);
+    \node[note, anchor=west] (nb2) at (11.6, -3.6) {B's state holds the ciphertext};
+    \draw[trustc, densely dotted] (nb2.west) -- (10, -3.6);
+    % outputs and the check
+    \node[keyout, anchor=west] (k1) at (11.6, -2.1) {outputs $(e, k)$};
+    \draw[->, thick, proofc] (en) -- (k1);
+    \node[keyout] (k2) at (0, -5.6) {outputs $(e, k')$};
+    \draw[->, thick, proofc] (de) -- (k2);
+    \draw[proofc, very thick, dashed] (k2.east) -- node[above, text=proofc]
+      {consistent keys: $k = k'$, except with probability $\varepsilon$} (15.0, -5.6) -- (15.0, -2.1) -- (k1.east);
+  \end{tikzpicture}
+
+  {\scriptsize\textcolor{trustc}{One epoch $e$, with A as the key generator.}}
+  \vspace{0.5em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item $k$ and $k'$ come from calls of different parties, with any number of queries between
+      them.
+    \item Only the party states carry $\mathit{sk}$ and the ciphertext between them. So the proof
+      needs a fact about both states that every query keeps: an invariant.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t,fragile]{The bricks of the proof}
+  \footnotesize
+  \begin{itemize}\footnotesize
+    \item Each row rests on the row below it.
+  \end{itemize}
+
+  \centering
+  \vspace{1.2em}
+  \begin{tikzpicture}[scale=0.72, transform shape,
+      every node/.append style={execute at begin node={\thickmuskip=4mu\medmuskip=3mu}},
+      b/.style={box, rounded corners=1pt, inner sep=3pt, font=\footnotesize, anchor=south west,
+        minimum height=0.95cm},
+      g/.style={b, draw=proofc, fill=proofc!10},
+      o/.style={b, draw=realc, fill=realc!8}]
+    \newcommand{\brick}[5]{\node[#1, minimum width={#3cm-1mm}, text width={#3cm-4mm}]
+      at (#2, {#4*1.05}) {#5};}
+    % row 0: one call
+    \brick{o}{0}{5.4}{0}{a call follows an edge\\of the protocol graph}
+    \brick{o}{5.4}{5.4}{0}{chunks decode to nothing\\or to the payload}
+    \brick{o}{10.8}{5.4}{0}{decapsulation fails with\\probability $\le \varepsilon$}
+    % row 1: invariant and failure risk
+    \brick{g}{0}{10.8}{1}{invariant $\mathit{Inv}$: for each epoch, both states and all messages\\agree on one key pair and one encapsulation}
+    \brick{g}{10.8}{5.4}{1}{failure risk: read\\from both states}
+    % row 2: premises
+    \brick{g}{0}{4.05}{2}{start: $\mathit{Inv}$,\\$\mathit{risk} = 0$}
+    \brick{g}{4.05}{4.05}{2}{each query\\keeps $\mathit{Inv}$}
+    \brick{g}{8.1}{4.05}{2}{a send adds $\le \varepsilon$\\to the expected risk}
+    \brick{g}{12.15}{4.05}{2}{failed\\$\Rightarrow \mathit{risk} \ge 1$}
+    % row 3: theorem
+    \node[g, line width=1.2pt, minimum width={16.2cm-1mm}, text width={16.2cm-4mm}] at (0, {3*1.05})
+      {\code{MLKEMBraid.correctness\_error\_le}: $1 - \Pr[\code{correct}] \le q\varepsilon$};
+    \node[label, font=\footnotesize, text=realc, anchor=east] at (-0.25, 0.47) {one call};
+    \node[label, font=\footnotesize, text=proofc, anchor=east] at (-0.25, 2.1) {game states\\along a run};
+  \end{tikzpicture}
+  \vspace{1.2em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item Only the bottom row is about single calls. Every row above it is about game states
+      along a run.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{The invariant ties both states to one transcript}
+  \footnotesize
+  \code{CorrectnessInv s := s.correct = false ∨ ∃ T, TranscriptConsistent T s}
+
+  \centering
+  \vspace{1.2em}
+  \begin{tikzpicture}[scale=0.8, transform shape, every node/.append style={font=\scriptsize}]
+    \node[proof, text width=4.0cm, line width=1.2pt] (T) at (0, 0) {\textbf{transcript $T$}\\for each epoch: the key pair and\\the first-stage encapsulation};
+    \node[impl, text width=2.4cm] (a) at (-7.0, 1.3) {state of A};
+    \node[impl, text width=2.4cm] (b) at (-7.0, -1.3) {state of B};
+    \node[spec, text width=2.8cm] (m) at (7.0, 1.3) {recorded messages\\\code{msgA}, \code{msgB}};
+    \node[spec, text width=2.8cm] (k) at (7.0, -1.3) {key tables\\\code{keyA}, \code{keyB}};
+    \draw[rel] (a.east) -- node[above=2pt, label, text=proofc] {\code{LocalPayloadInv}} (T.165);
+    \draw[rel] (b.east) -- node[below=2pt, label, text=proofc] {\code{LocalPayloadInv}} (T.195);
+    \draw[rel] (m.west) -- node[above=2pt, label, text=proofc] {\code{MessagePayloadInv}} (T.15);
+    \draw[rel] (k.west) -- node[below=2pt, label, text=proofc] {keys of completed\\epochs} (T.345);
+    \draw[rel] (a) -- node[left, label, text=proofc] {\code{ControlInv}\\\code{StatePairInv}} (b);
+  \end{tikzpicture}
+  \vspace{1.2em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item $T$ exists only in the proof. It records what the run sampled.
+    \item Both key tables are read from the same $T$, so the keys are equal.
+    \item A fact about one call cannot say ``this ciphertext was made for the key pair in the
+      other party's state''. The invariant says it, through $T$.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{The failure risk reads both states}
+  \footnotesize
+  \begin{itemize}\footnotesize
+    \item $\mathit{risk}$: the probability of failure that the states already carry. One epoch $e$, A as the
+      key generator.
+  \end{itemize}
+
+  \centering
+  \vspace{1.2em}
+  \begin{tikzpicture}[scale=0.76, transform shape, every node/.append style={font=\scriptsize,
+        execute at begin node={\thickmuskip=4mu\medmuskip=3mu}},
+      snap/.style={box, draw=ink!40, fill=ink!3, minimum width=3.5cm, minimum height=2.0cm},
+      pa/.style={impl, inner sep=2pt, font=\scriptsize, text width=3.0cm, minimum height=0.8cm},
+      v/.style={proof, inner sep=3pt, text width=3.2cm, font=\scriptsize, minimum height=1.1cm}]
+    \foreach \i/\sa/\sb in {
+        0/{A: \code{keysUnsampled}}/{B: \code{noHeaderReceived}},
+        1/{A: \code{keysSampled}, holds $\mathit{sk}$}/{B: \code{noHeaderReceived}},
+        2/{A: holds $\mathit{sk}$}/{B: \code{ct1Sampled}, holds the ciphertext},
+        3/{A: epoch $e + 1$}/{B: epoch $e$}} {
+      \node[snap] (g\i) at (4.9*\i, 0) {};
+      \node[pa] at (4.9*\i, 0.47) {\sa};
+      \node[pa] at (4.9*\i, -0.47) {\sb};
+    }
+    \draw[flow, realc] (g0) -- node[above, label, text=realc] {A: \code{send}} node[below, label, text=realc] {KeyGen} (g1);
+    \draw[flow, realc] (g1) -- node[above, label, text=realc] {B: \code{send}} node[below, label, text=realc] {Encaps} (g2);
+    \draw[flow, refc] (g2) -- node[above, label, text=refc] {A: \code{recv}} node[below, label, text=refc] {Decaps} (g3);
+    \node[v] (v0) at (0, -2.1) {$\mathit{risk} = 0$};
+    \node[v] (v1) at (4.9, -2.1) {$\mathit{risk} =$ the failure probability of this key pair};
+    \node[v] (v2) at (9.8, -2.1) {$\mathit{risk} = 0$ or $1$: does $\mathit{sk}$ decapsulate to B's key?};
+    \node[v] (v3) at (14.7, -2.1) {keys equal: $\mathit{risk} = 0$\\if not: failed, $\mathit{risk} = 1$};
+    \foreach \i in {0,...,3} { \draw[proofc, thick] (g\i) -- (v\i); }
+  \end{tikzpicture}
+  \vspace{1.2em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item $\mathit{risk}$ reads both party states. No single call has $\mathit{sk}$ and the ciphertext
+      together.
+    \item A send raises $\mathbb{E}[\mathit{risk}]$ by at most $\varepsilon$, and a failed game has
+      $\mathit{risk} \ge 1$. So $\Pr[\text{fail}] \le \mathbb{E}[\mathit{risk}] \le q\varepsilon$.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{From ML-KEM Braid to \code{SPQR.Chunked}}\label{fr:transport}
+  \footnotesize
+  \begin{itemize}\footnotesize
+    \item secure-messaging \#398 proves the same bound for \code{SPQR.Chunked}, without
+      repeating the Braid proof.
+  \end{itemize}
+
+  \centering
+  \vspace{1.2em}
+  \begin{tikzpicture}[scale=0.85, transform shape, every node/.append style={font=\scriptsize}]
+    \node[spec, text width=3.4cm] (s) at (0, 0) {\code{SPQR.Chunked}\\game state};
+    \node[spec, text width=3.4cm] (b) at (7.5, 0) {\code{MLKEMBraid}\\game state};
+    \draw[flow, proofc] (s) -- node[above, label, text=proofc] {\code{GameState.toMLKEMBraid}} (b);
+    \node[proof, text width=4.2cm] (iv) at (7.5, -1.6) {the invariant and the failure risk of the Braid proof};
+    \node[proof, text width=3.4cm] (ack) at (0, -1.6) {extra invariant:\\\code{Ct1AckInv}};
+    \draw[rel] (b) -- (iv);
+    \draw[rel] (s) -- (ack);
+  \end{tikzpicture}
+  \vspace{1.2em}
+
+  \raggedright
+  \begin{itemize}\footnotesize
+    \item Most queries are the Braid query on the translated state, so the Braid lemmas apply.
+    \item One query differs: a plain vector chunk delivered to a party in
+      \code{ct1Acknowledged}. The translation relabels it as an acknowledging chunk.
+    \item \#398 is not merged. The bridge pins SM at \code{c16e287}, which has it.
+  \end{itemize}
+  \links{Lean: \href{\smlean/SPQR/Correctness.lean\#L472}{\code{SPQR.correctness\_error\_le}}.
+    Docs: \href{\smdocs/SPQR/\#--informal-preview-spqr_protocol_correctness--statement}{SPQR correctness}}
+\end{frame}
+
+\end{document}
