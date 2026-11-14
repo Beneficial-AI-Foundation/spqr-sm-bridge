@@ -17,12 +17,12 @@ These statements make sure that `fit` and `pick` hide no mismatch with the code.
   `epoch_bound_strong`, not `epoch_budget`.
 * Upstream adapters: the facts that connect the issues of SparsePostQuantumRatchet-verify to the
   fields of `BridgeObligations`.
-* Decoder: on honest states, the decoder wrapper runs the code's own calls.
+* Decoder: on states that satisfy `L2.Inv`, the decoder wrapper runs the code's own calls.
 -/
 
 namespace SpqrBridge
 
-open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
+open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states BraidModel
 open OracleSpec OracleComp ENNReal
 open OracleComp.ProgramLogic OracleComp.ProgramLogic.Relational
 open SCKAScheme
@@ -103,8 +103,8 @@ theorem codeGameInv_epochs (s : GameState States States (B 32) Message) (h : Cod
 
 /-! ## Upstream adapters -/
 
-/-- Assume `MlkemSizes`. Let `ReachParty s n`. Then `Refines s σ` for some `σ`. -/
-theorem reachParty_refines (hsz : MlkemSizes) (s : States) (n : ℕ) (h : ReachParty s n) :
+/-- Let `ReachParty s n`. Then `Refines s σ` for some `σ`. -/
+theorem reachParty_refines (s : States) (n : ℕ) (h : ReachParty s n) :
     ∃ σ, Refines s σ := by
   obtain ⟨P, hP⟩ := codeAgrees_exists
   obtain ⟨sA, sB, mA, mB, hr, hs⟩ := h
@@ -121,7 +121,7 @@ theorem reachParty_refines (hsz : MlkemSizes) (s : States) (n : ℕ) (h : ReachP
   have hrecv : ∀ (s : States) (msg : Message) (out : v1.chunked.states.Recv),
       codeRecv s msg = some out → (∃ σ, Refines s σ) → ∃ σ, Refines out.state σ := by
     rintro s msg out hout ⟨σ, hσ⟩
-    obtain ⟨σ', -, hσ'⟩ := recv_refines P hP hsz s σ hσ msg out (codeRecv_some hout)
+    obtain ⟨σ', -, hσ'⟩ := recv_refines P hP s σ hσ msg out (codeRecv_some hout)
     exact ⟨σ', hσ'⟩
   clear hs
   induction hr with
@@ -142,13 +142,13 @@ theorem codeRecv_stale (s : States) (msg : Message) (h : msg.epoch.val < s.epoch
 
 /-! ## Decoder -/
 
-/-- Let `hK : 0 < K`, `hKN : K ≤ 2 ^ 16` and `cd : L2.Codec M K`. Let `d` be honest for `p` in
-`L2.polyStreamDecoder K hKN cd`, and let `c = (L2.ecp K hK hKN cd).encode p i`. Then the code's
+/-- Let `hK : 0 < K`, `hKN : K ≤ 2 ^ 16` and `cd : L2.Codec M K`. Let `d` satisfy
+`L2.Inv (cd.ser p)`, and let `c = (L2.ecp K hK hKN cd).encode p i`. Then the code's
 `add_chunk d (L2.toChunk c.1 c.2)` returns `ok d'` for some `d'`, and `addChunk d c = d'` in
 `L2.polyStreamDecoder`. -/
 theorem polyStreamDecoder_addChunk_code {M : Type} (K : ℕ) (hK : 0 < K) (hKN : K ≤ 2 ^ 16)
     (cd : L2.Codec M K) (d : (L2.polyStreamDecoder K hKN cd).D) (p : M) (i : ℕ)
-    (hd : (L2.polyStreamDecoder K hKN cd).Honest d p) :
+    (hd : L2.Inv (cd.ser p) d) :
     ∃ d', encoding.polynomial.PolyDecoder.Insts.SpqrEncodingDecoder.add_chunk d
         (L2.toChunk ((L2.ecp K hK hKN cd).encode p i).1 ((L2.ecp K hK hKN cd).encode p i).2) =
           ok d' ∧
@@ -161,13 +161,13 @@ theorem polyStreamDecoder_addChunk_code {M : Type} (K : ℕ) (hK : 0 < K) (hKN :
   simp only [L2.polyStreamDecoder, hd']
   rfl
 
-/-- Let `hKN : K ≤ 2 ^ 16` and `cd : L2.Codec M K`. Let `d` be honest for `p` in
-`L2.polyStreamDecoder K hKN cd`. Then the code's `decoded_message d` returns `ok r` for some `r`,
+/-- Let `hKN : K ≤ 2 ^ 16` and `cd : L2.Codec M K`. Let `d` satisfy
+`L2.Inv (cd.ser p)`. Then the code's `decoded_message d` returns `ok r` for some `r`,
 and `decodedPayload d = r.bind fun v => cd.parse (L2.unflatten K v.val)` in
 `L2.polyStreamDecoder`. -/
 theorem polyStreamDecoder_decoded_code {M : Type} (K : ℕ) (hKN : K ≤ 2 ^ 16)
     (cd : L2.Codec M K) (d : (L2.polyStreamDecoder K hKN cd).D) (p : M)
-    (hd : (L2.polyStreamDecoder K hKN cd).Honest d p) :
+    (hd : L2.Inv (cd.ser p) d) :
     ∃ r, encoding.polynomial.PolyDecoder.Insts.SpqrEncodingDecoder.decoded_message d = ok r ∧
       (L2.polyStreamDecoder K hKN cd).decodedPayload d =
         r.bind fun v => cd.parse (L2.unflatten K v.val) := by

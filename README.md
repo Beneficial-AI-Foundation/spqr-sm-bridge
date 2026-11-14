@@ -8,8 +8,8 @@ as an SCKA scheme by an adapter. The machine is the Aeneas extraction verified i
 [SparsePostQuantumRatchet-verify](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify).
 The result does not cover the rest of the library, such as serialization or the public API.
 
-This is a proof of concept. The theorem is conditional on four facts about the code that are not
-proved yet. It also depends on a trusted base: three axioms, and Lean models of the external
+This is a proof of concept. The theorem is conditional on three facts about the code that are not
+proved yet. It also depends on a trusted base: two axioms, and Lean models of the external
 functions that the code calls. Both lists are in [Assumptions](#assumptions).
 
 ## Result
@@ -50,19 +50,19 @@ order and with replay. It does not inject messages.
 
 The proof composes three relations:
 
-1. **Code to `Braid`.** SparsePostQuantumRatchet-verify relates the extracted `States` machine to an
-   abstract machine `Braid` that follows ML-KEM Braid [MLKEMBraid], with the code's deviations.
+1. **Code to `BraidModel`.** SparsePostQuantumRatchet-verify relates the extracted `States` machine to an
+   abstract machine `BraidModel` that follows ML-KEM Braid [MLKEMBraid], with the code's deviations.
    Its proved theorems, `send_refines` and `recv_refines`, cover one direction: a step of the code
-   that succeeds refines a `Braid` step, for some randomness. The bound needs more: `send` does not
+   that succeeds refines a `BraidModel` step, for some randomness. The bound needs more: `send` does not
    fail, its randomness is the bytes that `fill_bytes` returned, and the code accepts every message
-   of the same run that `Braid` accepts. These are the fields `send_total`, `send_refines_bytes` and `recv_complete` of
+   of the same run that `BraidModel` accepts. These are the fields `send_total`, `send_refines_bytes` and `recv_complete` of
    `BridgeObligations`. So the part of step 1 that the theorem uses is assumed, not proved, and
    `code_correctness_error_le` does not use `send_refines` or `recv_refines`.
-2. **`Braid` to `SPQR.Chunked`.** This repository relates `Braid` to secure-messaging's model
+2. **`BraidModel` to `SPQR.Chunked`.** This repository relates `BraidModel` to secure-messaging's model
    `SPQR.Chunked`, arm by arm (`send_chunked`, `receive_chunked`). The transfer in step 3 compares
-   the code's game with secure-messaging's, so it uses the composition `RA`. If some `Braid` state
+   the code's game with secure-messaging's, so it uses the composition `RA`. If some `BraidModel` state
    lies between a code state and a secure-messaging state, `RA` relates them. Messages
-   are related by `Braid`'s message map followed by the chunk map (`RM`).
+   are related by `BraidModel`'s message map followed by the chunk map (`RM`).
 3. **The bound.** secure-messaging proves `SPQR.correctness_error_le` with one lemma,
    `correctness_error_le_of_potential`, over an invariant and a function on its game states (its
    potential). This repository reuses that invariant and its one-step bounds for the code's game
@@ -80,14 +80,15 @@ The proof composes three relations:
 Two facts make the second relation possible:
 
 - **Generic stream decoders.** The Rust erasure decoder skips points as they arrive, so its
-  state depends on the arrival order. The secure-messaging branch below makes `MLKEMBraid` and
-  `SPQR.Chunked` generic in their stream decoder, with one safety law, `StreamDecoder.Lawful`.
-  Its own set-based decoder is an instance. The generic theorems take the law as a premise in
-  place of erasure-code correctness, and the concrete v1 bound keeps its statement.
-- **The Rust decoder is lawful.** `polyStreamDecoder_lawful`: from an honest state, adding an
-  honest chunk keeps the state honest, and the decoder returns nothing or the payload. The law is
-  a safety property only. A decoder that never returns a payload also satisfies it, so the law
-  says nothing about progress.
+  state depends on the arrival order. secure-messaging PR 402 makes `Braid` and `SPQR.Chunked`
+  generic in their stream decoder, with one safety law, `StreamDecoder.Sound`. Its own set-based
+  decoder is an instance. The generic theorems take the law as a premise in place of erasure-code
+  correctness, and the concrete v1 bound keeps its statement.
+- **The Rust decoder is sound.** `polyStreamDecoder_sound`: for every payload `p` and every
+  nonempty list of counters, the decoder that receives the chunks of `p` at those counters decodes
+  nothing or `p`. The proof keeps an invariant: the decoder holds only points of `p`. The law is a
+  safety property only. A decoder that never returns a payload also satisfies it, so the law says
+  nothing about progress.
 
 ## Assumptions
 
@@ -97,19 +98,18 @@ does not list it.
 
 ### Premises
 
-`BridgeObligations` has four fields. Each is a statement about the code, owned by an issue of
+`BridgeObligations` has three fields. Each is a statement about the code, owned by an issue of
 SparsePostQuantumRatchet-verify:
 
 | Field | Statement | Issue |
 |---|---|---|
-| `mlkem_sizes` | libcrux reports the ML-KEM-768 sizes 960 (`ct1`), 128 (`ct2`) and 1152 (encapsulation key) | [#786](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/786) |
 | `send_total` | on a reachable state whose epoch plus one fits in a `u64`, `send` succeeds when `fill_bytes` returns a buffer of the length that the send asks for | [#785](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/785) |
-| `recv_complete` | on a reachable state that refines a `Braid` state, for a message that the other party sent in the same run, whose epoch plus one fits in a `u64` and that `Braid` accepts, `recv` succeeds with a state that refines `Braid`'s next state and with the same key | [#785](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/785) |
-| `send_refines_bytes` | on a reachable state whose epoch plus one fits in a `u64`, a successful `send` takes the `Braid` step whose randomness is the bytes that `fill_bytes` returned, for a buffer of the length that the send asks for: the next states are related, and the message and key are the same | [#787](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/787) |
+| `recv_complete` | on a reachable state that refines a `BraidModel` state, for a message that the other party sent in the same run, whose epoch plus one fits in a `u64` and that `BraidModel` accepts, `recv` succeeds with a state that refines `BraidModel`'s next state and with the same key | [#785](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/785) |
+| `send_refines_bytes` | on a reachable state whose epoch plus one fits in a `u64`, a successful `send` takes the `BraidModel` step whose randomness is the bytes that `fill_bytes` returned, for a buffer of the length that the send asks for: the next states are related, and the message and key are the same | [#787](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/787) |
 
 The exact statements are the fields of `BridgeObligations` in `SpqrBridge/CodeBound.lean`.
 
-Nobody has shown yet that the four fields hold together. If one is false, the theorem says
+Nobody has shown yet that the three fields hold together. If one is false, the theorem says
 nothing. To lower that risk, the fields about `send` and `recv` take the premises that the proof
 can supply from the code-side game invariant `CodeGameInv`. The state is reachable
 (`ReachParty`): a run of the code's own sends, and receives of sent messages (`CodeReach`), ends
@@ -120,10 +120,9 @@ or 0 bytes. `recv_complete` covers only messages that the other party sent in th
 
 ### Axioms
 
-Beyond Lean's three axioms, `#print axioms code_correctness_error_le` lists three axioms of the
-trusted base of SparsePostQuantumRatchet-verify: `spqr.kdf.hkdf_to_slice_spec`,
-`libcrux_hmac.hmac_sha256_tag32_spec` and
-`incremental_mlkem768.potentially_fix_state_incorrectly_encoded_by_libcrux_issue_1275_spec`.
+Beyond Lean's three axioms, `#print axioms code_correctness_error_le` lists two axioms of the
+trusted base of SparsePostQuantumRatchet-verify: `spqr.kdf.hkdf_to_slice_spec` and
+`libcrux_hmac.hmac_sha256_tag32_spec`.
 
 ### Models and other trusted parts
 
@@ -141,9 +140,7 @@ trusted, and Lean does not list them:
   the two rounds together give ML-KEM.Encaps (`Spqr/Crypto/Fips203/KEM/EncapsIncremental.lean`).
 - **Opaque functions.** These constants have no definition. So the theorem holds for every
   function of their type that meets the axioms above. The constants are `Fips203.stdPrimitives`
-  (SHA3 and SHAKE), `crypto.HMAC_SHA256`, `libcrux_hmac.hmac` and the libcrux #1275 workaround.
-  They also include the libcrux length functions `Ciphertext1.len`, `Ciphertext2.len` and
-  `pk2_len`, whose values are the premise `mlkem_sizes`.
+  (SHA3 and SHAKE), `crypto.HMAC_SHA256` and `libcrux_hmac.hmac`.
 - **Total wrappers.** `pick` and `fit` (`SpqrBridge/CodePrims.lean`) make the code's primitives
   total. Outside the inputs on which the code succeeds, they return an arbitrary value or zeros.
   `SpqrBridge/CodeContracts.lean` proves that the code's results match them on those inputs.
@@ -165,7 +162,7 @@ trusted, and Lean does not list them:
 
 ## Limits
 
-- The theorem is conditional on the four fields above.
+- The theorem is conditional on the three fields above.
 - `ε` is the correctness error of `codeKem`, a KEM built from the Lean models of libcrux. It is
   not yet bounded, so the result gives no number. If `q · ε ≥ 1`, the bound says nothing. See
   [Toward a numerical bound](#toward-a-numerical-bound).
@@ -176,7 +173,9 @@ trusted, and Lean does not list them:
   byte-swapped words. SPQR's workaround repairs such a state unless every word of `e₂` is 0 or
   -1. For an honestly sampled `e₂`, that case has probability `(10/16)^256 ≈ 2^-173.6`.
 - The SparsePostQuantumRatchet-verify branch moves to Aeneas `nightly-2026.11.03-ab34bd2` by
-  renaming one identifier in the extracted files by hand, without a new extraction.
+  renaming one identifier in the extracted files by hand, without a new extraction. It also renames
+  the namespace `Braid` to `BraidModel`, because secure-messaging defines `Braid.State`,
+  `Braid.send` and `Braid.receive` too.
 - The source references in `SrcTranslated/FunsExternal.lean` name libcrux-ml-kem 0.0.7 and
   libcrux-hmac 0.0.6, but `Cargo.lock` pins 0.0.10 and 0.0.8. For ML-KEM, the incremental API,
   the state layout, sampling and serialization are the same in 0.0.7 and 0.0.10, so only the
@@ -206,10 +205,8 @@ libcrux. To get a number, relate them:
 3. **The rest of ML-KEM.** Prove that the two FIPS 203 models agree on key generation,
    encapsulation and decapsulation, given 1 and 2.
 4. **The #788 workaround.** `codeKem` applies it only to states that the model wrote. There, the
-   words of `e₂` are 0, 1, 2, 3327 and 3328, and the Rust body returns `None`. The Lean
-   workaround is opaque, so this needs a specification of the workaround, which is SPQR's own
-   Rust code. The bridge needs only the corollary for these states. The axiom for arbitrary
-   2080-byte inputs stays.
+   words of `e₂` are 0, 1, 2, 3327 and 3328, and the Rust body returns `None`.
+   SparsePostQuantumRatchet-verify proves this as `encaps2EffectiveState_stateOut`.
 
 Then `ε ≤ ε_SM + δ`, where `ε_SM` is the error of `mlkem768Scheme` and `δ` bounds the
 probability that a 280-triple run fails. A bound on `δ` needs a hypothesis on SHAKE128, because
@@ -228,9 +225,9 @@ needs more than this repository gives.
 These parts can be reused:
 
 - The relations `ChunkedRel`, `RA` and `RM`, with the proofs for every arm.
-- The facts about the Rust erasure code: `polyStreamDecoder_lawful`, `PolyEncoderChunk` and
+- The facts about the Rust erasure code: `polyStreamDecoder_sound`, `PolyEncoderChunk` and
   `next_chunk_wrap`.
-- The adapter `codeScheme`, the epoch bound and the four obligations, once they are proved.
+- The adapter `codeScheme`, the epoch bound and the three obligations, once they are proved.
 
 These parts hold only for correctness:
 
@@ -264,13 +261,13 @@ to the adversary. Liveness needs progress laws for the decoder and delivery assu
 
 | Package | Repository | Branch | Commit |
 |---|---|---|---|
-| `Spqr` | SparsePostQuantumRatchet-verify | `la/bridge-aeneas-bump-main` | `c950d94` |
-| `SecureMessaging` | secure-messaging | `la/generic-decoder` | `c16e287` |
+| `Spqr` | SparsePostQuantumRatchet-verify | `la/aeneas-bump-ab34bd2` | `b1be65b` |
+| `SecureMessaging` | secure-messaging | `main` | `19964e7` |
 
-The `Spqr` branch is `main` at `15bf667`, which includes
-[#781](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/pull/781), plus
-one commit that moves to Aeneas `nightly-2026.11.03-ab34bd2` and Lean `v4.35.0` (see
-[Limits](#limits)). `lakefile.toml` pins both commits. Both packages use Lean `v4.35.0` and Mathlib
+The `Spqr` commit is `main` at `90c6a61`, plus the rename of `Braid` to `BraidModel`
+([#826](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/pull/826)), plus
+one commit that moves to Aeneas `nightly-2026.11.03-ab34bd2` and Lean `v4.35.0` ([#828](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/pull/828),
+see [Limits](#limits)). `lakefile.toml` pins both commits. Both packages use Lean `v4.35.0` and Mathlib
 `56a00585`. The first build compiles both dependencies and takes a while. `lake exe cache get`
 fetches Mathlib only.
 
@@ -293,8 +290,8 @@ lake build
 | `IdealRng.lean` | the assumption `IdealRng` on the generator. `send_bridge`: under it, one extracted `send` from a sampled state has the distribution of `codeSendA`. `idealRng_tape`: a uniform tape meets it |
 | `RealScheme.lean` | `realScheme`: each send runs the extracted `send` from a new generator state. `real_correctness_error_le`: the bound for it under `IdealRng` |
 | `CodePrims.lean`, `CodeParams.lean` | the code's primitives, and secure-messaging parameters built from them |
-| `ChunkedRel.lean`, `ChunkedSend*.lean`, `ChunkedRecv*.lean` | the relation between `Braid` and `SPQR.Chunked`, with every arm |
-| `PolyDecoderLawful.lean`, `PolyEncoderChunk.lean`, `NextChunkWrap.lean` | the Rust erasure code against secure-messaging's interface |
+| `ChunkedRel.lean`, `ChunkedSend*.lean`, `ChunkedRecv*.lean` | the relation between `BraidModel` and `SPQR.Chunked`, with every arm |
+| `PolyDecoderSound.lean`, `PolyEncoderChunk.lean`, `NextChunkWrap.lean` | the Rust erasure code against secure-messaging's interface |
 | `PotentialTransfer.lean`, `BudgetedPotential.lean` | the transfer of the bound |
 
 ## References

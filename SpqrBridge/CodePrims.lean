@@ -25,7 +25,7 @@ be total and the code gives a length only on its own domain.
 
 namespace SpqrBridge
 
-open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
+open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states BraidModel
 
 /-! ## Total byte strings -/
 

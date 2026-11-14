@@ -16,7 +16,7 @@ The bytes that a send asks for (`sendLen_of_refines`), the two sampling arms (`k
 
 namespace SpqrBridge
 
-open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
+open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states BraidModel
 open ErasureCodePayload.Streaming
 open OracleSpec OracleComp ENNReal
 open OracleComp.ProgramLogic OracleComp.ProgramLogic.Relational
@@ -59,7 +59,7 @@ is `⟨⟨ep, .hdr ch.1⟩, ep - 1, none, .keysSampled ⟨ep, a, pk, (keyGenOf t
 value of `Chunked.send` in `keysUnsampled ⟨ep, a⟩` when key generation samples `t`
 (`send_keysUnsampled_eq`). -/
 noncomputable def keysUnsampledOut (ep : ℕ) (a : Auth) (t : B 64) :
-    SPQR.Chunked.SendResult codeParams Braid.Auth :=
+    SPQR.Chunked.SendResult codeParams BraidModel.Auth :=
   let pk := (keyGenOf t).1
   let hdr : B 64 := pk.1.1
   let tag := codeAuth.macHeader a ep hdr
@@ -71,15 +71,15 @@ noncomputable def keysUnsampledOut (ep : ℕ) (a : Auth) (t : B 64) :
 theorem send_keysUnsampled_eq (ep : ℕ) (a : Auth) :
     SPQR.Chunked.send codeParams codeAuth (.keysUnsampled ⟨ep, a⟩) =
       (do let t ← sampleB 64; pure (keysUnsampledOut ep a t)) := by
-  simp only [SPQR.Chunked.send, SPQR.EkSender.sendHeader, codeParams, codeKem, keysUnsampledOut,
-    bind_assoc, pure_bind]
+  simp only [SPQR.Chunked.send, SPQR.EkSender.sendHeader, SPQR.Parameters.generate, codeParams,
+    codeDet, keysUnsampledOut, bind_assoc, pure_bind]
   rfl
 
 /-- Let `ChunkedRel σ (.keysUnsampled ⟨ep, a⟩)` and `ep < 2 ^ 64`. Then, for every `t : B 64`,
-`SendAgree (Braid.send codePrims σ t.1) (keysUnsampledOut ep a t)`. This is transition (1). -/
+`SendAgree (BraidModel.send codePrims σ t.1) (keysUnsampledOut ep a t)`. This is transition (1). -/
 theorem keysUnsampled_agree (ep : ℕ) (a : Auth) (σ : BState)
     (hrel : ChunkedRel σ (.keysUnsampled ⟨ep, a⟩)) (h64 : ep < 2 ^ 64) (t : B 64) :
-    SendAgree (Braid.send codePrims σ t.1) (keysUnsampledOut ep a t) := by
+    SendAgree (BraidModel.send codePrims σ t.1) (keysUnsampledOut ep a t) := by
   obtain ⟨hmk, hst⟩ := hrel
   rcases σ with ⟨e, a'⟩ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ <;> simp only [SameState] at hst
   obtain ⟨rfl, rfl⟩ := hst
@@ -92,7 +92,7 @@ theorem keysUnsampled_agree (ep : ℕ) (a : Auth) (σ : BState)
     ((codePrims.keyGen t.1).2.1 ++ Auth.macHdr codePrims a' e (codePrims.keyGen t.1).2.1)
     (by simp only [pairForm, fit_of_length h2, fit_of_length hM])
   obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 3 _ _ hdrCodec (by decide) _ _ henc
-  simp only [Braid.send, hnc]
+  simp only [BraidModel.send, hnc]
   exact ⟨⟨hmk, rfl, rfl, (fit_of_length h1).symm, (fit_of_length h2).symm,
     (fit_of_length h3).symm, hrel'⟩, rfl, hc, rfl, rfl⟩
 
@@ -104,7 +104,7 @@ is `⟨⟨ep, .ct1 ch.1⟩, ep - 1, some (ep, ik), .ct1Sampled st ch.2 dec⟩`. 
 (`send_headerReceived_eq`). -/
 noncomputable def headerReceivedOut (ep : ℕ) (a : Auth) (hdr : B 64)
     (dec : encoding.polynomial.PolyDecoder) (t : B 32) :
-    SPQR.Chunked.SendResult codeParams Braid.Auth :=
+    SPQR.Chunked.SendResult codeParams BraidModel.Auth :=
   let o := encaps1Of hdr t
   let ik := codeParams.kdfOK o.2.2 ep
   let ch := (EncoderState.init codeParams.ecpCt1 o.2.1).nextChunk
@@ -117,16 +117,16 @@ theorem send_headerReceived_eq (ep : ℕ) (a : Auth) (hdr : B 64)
     (dec : encoding.polynomial.PolyDecoder) :
     SPQR.Chunked.send codeParams codeAuth (.headerReceived ⟨ep, a, hdr⟩ dec) =
       (do let t ← sampleB 32; pure (headerReceivedOut ep a hdr dec t)) := by
-  simp only [SPQR.Chunked.send, SPQR.CtSender.sendCt1, codeParams, codeInc, encaps1Fn,
-    headerReceivedOut, bind_assoc, pure_bind]
+  simp only [SPQR.Chunked.send, SPQR.CtSender.sendCt1, SPQR.Parameters.encaps1, codeParams,
+    codeDet, headerReceivedOut, bind_assoc, pure_bind]
 
 /-- Let `ChunkedRel σ (.headerReceived ⟨ep, a, hdr⟩ dec)` and `ep < 2 ^ 64`. Then, for every
-`t : B 32`, `SendAgree (Braid.send codePrims σ t.1) (headerReceivedOut ep a hdr dec t)`. This is
+`t : B 32`, `SendAgree (BraidModel.send codePrims σ t.1) (headerReceivedOut ep a hdr dec t)`. This is
 transition (7). -/
 theorem headerReceived_agree (ep : ℕ) (a : Auth) (hdr : B 64)
     (dec : encoding.polynomial.PolyDecoder) (σ : BState)
     (hrel : ChunkedRel σ (.headerReceived ⟨ep, a, hdr⟩ dec)) (h64 : ep < 2 ^ 64) (t : B 32) :
-    SendAgree (Braid.send codePrims σ t.1) (headerReceivedOut ep a hdr dec t) := by
+    SendAgree (BraidModel.send codePrims σ t.1) (headerReceivedOut ep a hdr dec t) := by
   obtain ⟨hmk, hst⟩ := hrel
   rcases σ with _ | _ | _ | _ | _ | _ | ⟨e, a', hdr', d⟩ | _ | _ | _ | _ <;>
     simp only [SameState] at hst
@@ -141,7 +141,7 @@ theorem headerReceived_agree (ep : ℕ) (a : Auth) (hdr : B 64)
     (fit 960 (codePrims.encaps1 hdr.1 t.1).2.1) (codePrims.encaps1 hdr.1 t.1).2.1
     (fit_of_length h2)
   obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 30 _ _ ct1Codec (by decide) _ _ henc
-  simp only [Braid.send, hnc]
+  simp only [BraidModel.send, hnc]
   refine ⟨⟨auth_update_macKey_length _ h64 _, rfl, ?_, rfl, (fit_of_length h1).symm,
     (fit_of_length h2).symm, hrel', rfl, hwf⟩, rfl, hc, ?_, rfl⟩
   · show _ = Auth.update codePrims a' e (codeParams.kdfOK (encaps1Of hdr t).2.2 e).1

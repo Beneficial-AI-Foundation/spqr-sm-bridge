@@ -29,7 +29,7 @@ because its proof uses the files that import this one.
 
 namespace SpqrBridge
 
-open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
+open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states BraidModel
 open OracleSpec OracleComp ENNReal
 open OracleComp.ProgramLogic OracleComp.ProgramLogic.Relational
 open SCKAScheme
@@ -124,37 +124,35 @@ end Budgeted
 
 /-! ## The allowed assumptions -/
 
-/-- `BridgeObligations` is the proposition with the four fields `mlkem_sizes`, `send_total`,
-`recv_complete` and `send_refines_bytes`, with the types below. These are the premises of
-`code_correctness_error_le` about the extracted code. Constructing it requires proofs of all four
+/-- `BridgeObligations` is the proposition with the three fields `send_total`, `recv_complete`
+and `send_refines_bytes`, with the types below. These are the premises of
+`code_correctness_error_le` about the extracted code. Constructing it requires proofs of all three
 fields. This file does not prove them. Each field names the issue of
 SparsePostQuantumRatchet-verify that tracks its proof. -/
 structure BridgeObligations : Prop where
-  /-- `MlkemSizes` holds. Issue #786. -/
-  mlkem_sizes : MlkemSizes
   /-- Let `ReachParty s n`, `s.epochOf.val + 1 < 2 ^ 64` and `buf.length = sendLen s`. Then
   `codeSend s buf = some out` for some `out`. Issue #785, statement 1. -/
   send_total : ∀ (s : States) (n : ℕ) (buf : Slice Std.U8), ReachParty s n →
     s.epochOf.val + 1 < 2 ^ 64 → buf.length = sendLen s →
       ∃ out, codeSend s buf = some out
   /-- Let `ReachRecv s msg n`, `Refines s σ` and `msg.epoch.val + 1 < 2 ^ 64`. If
-  `Braid.receive codePrims σ (absMsg msg) = some (σ', k)`, then `codeRecv s msg = some out` for
+  `BraidModel.receive codePrims σ (absMsg msg) = some (σ', k)`, then `codeRecv s msg = some out` for
   some `out` with `Refines out.state σ'` and `out.key.map absKey = k`. Issue #785, statement 2. -/
-  recv_complete : ∀ (s : States) (n : ℕ) (σ σ' : Braid.State encoding.polynomial.PolyEncoder
+  recv_complete : ∀ (s : States) (n : ℕ) (σ σ' : BraidModel.State encoding.polynomial.PolyEncoder
       encoding.polynomial.PolyDecoder) (msg : Message) (k : Option Key),
     ReachRecv s msg n → Refines s σ → msg.epoch.val + 1 < 2 ^ 64 →
-      Braid.receive codePrims σ (absMsg msg) = some (σ', k) →
+      BraidModel.receive codePrims σ (absMsg msg) = some (σ', k) →
         ∃ out, codeRecv s msg = some out ∧ Refines out.state σ' ∧ out.key.map absKey = k
   /-- Let `ReachParty s n`, `s.epochOf.val + 1 < 2 ^ 64`, `buf.length = sendLen s`,
-  `Refines s σ` and `codeSend s buf = some out`. Let `(σ', m, k) = Braid.send codePrims σ buf.val`.
+  `Refines s σ` and `codeSend s buf = some out`. Let `(σ', m, k) = BraidModel.send codePrims σ buf.val`.
   Then `Refines out.state σ'`, `absMsg out.msg = m` and `out.key.map absKey = k`. Issue #787,
   statement 5. -/
-  send_refines_bytes : ∀ (s : States) (n : ℕ) (σ : Braid.State encoding.polynomial.PolyEncoder
+  send_refines_bytes : ∀ (s : States) (n : ℕ) (σ : BraidModel.State encoding.polynomial.PolyEncoder
       encoding.polynomial.PolyDecoder) (buf : Slice Std.U8) (out : v1.chunked.states.Send),
     ReachParty s n → s.epochOf.val + 1 < 2 ^ 64 → buf.length = sendLen s →
       Refines s σ → codeSend s buf = some out →
-        Refines out.state (Braid.send codePrims σ buf.val).1 ∧
-          absMsg out.msg = (Braid.send codePrims σ buf.val).2.1 ∧
-          out.key.map absKey = (Braid.send codePrims σ buf.val).2.2
+        Refines out.state (BraidModel.send codePrims σ buf.val).1 ∧
+          absMsg out.msg = (BraidModel.send codePrims σ buf.val).2.1 ∧
+          out.key.map absKey = (BraidModel.send codePrims σ buf.val).2.2
 
 end SpqrBridge

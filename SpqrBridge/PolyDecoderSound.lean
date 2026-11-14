@@ -11,12 +11,13 @@ import Mathlib.LinearAlgebra.Lagrange
 import Spqr.Auxiliary.Aeneas.SpecImpExists
 
 /-!
-# The code's polynomial decoder meets secure-messaging's stream-decoder law
+# The code's polynomial decoder is a sound stream decoder
 
 `PolyDecoder` (`src/encoding/polynomial.rs`, extracted by Aeneas) is wrapped as a
-`StreamDecoder` of secure-messaging, and `Lawful` (law L2) is proved for it: adding an honestly
-encoded chunk to an honest decoder keeps it honest, and the decoder then decodes nothing or the
-payload.
+`StreamDecoder` of secure-messaging, and `StreamDecoder.Sound` is proved for it: for every
+payload `p` and every nonempty list of counters, the decoder that receives the chunks of `p` at
+those counters decodes nothing or `p`. The proof keeps the invariant `Inv`: the decoder holds only
+points of `p`.
 
 The result is generic in the number `K` of points per polynomial slot. The payload has `32 K`
 bytes and the decoder is `PolyDecoder::new(32 K)`. The four streams of ML-KEM Braid use
@@ -356,18 +357,20 @@ noncomputable def polyStreamDecoder {M : Type} (K : ℕ) (hKN : K ≤ 2 ^ 16)
   decodedPayload d := match (decoded_message d).match with
     | .ok (some v) => cd.parse (unflatten K v.val)
     | _ => none
-  Honest d p := Inv (cd.ser p) d
-  honest_empty p := by
-    refine ⟨?_, ?_, ?_⟩
-    · simp only [emptyDecoder, UScalar.ofNatCore_val_eq]
-    · apply PolyDecoder.PointsValid_of_forall_nil
-      intro s hs
-      simp only [emptyDecoder, Array.make_val, List.mem_replicate] at hs
-      rw [hs.2]; rfl
-    · intro s hs pt hpt
-      simp only [emptyDecoder, Array.make_val] at hpt
-      rw [getElem!_pos _ _ (by simp; omega), List.getElem_replicate] at hpt
-      cases hpt
+
+/-- The empty decoder satisfies `Inv` for every payload. -/
+theorem inv_empty {M : Type} (K : ℕ) (hKN : K ≤ 2 ^ 16) (cd : Codec M K) (p : M) :
+    Inv (cd.ser p) (polyStreamDecoder K hKN cd).empty := by
+  refine ⟨?_, ?_, ?_⟩
+  · simp only [polyStreamDecoder, emptyDecoder, UScalar.ofNatCore_val_eq]
+  · apply PolyDecoder.PointsValid_of_forall_nil
+    intro s hs
+    simp only [polyStreamDecoder, emptyDecoder, Array.make_val, List.mem_replicate] at hs
+    rw [hs.2]; rfl
+  · intro s hs pt hpt
+    simp only [polyStreamDecoder, emptyDecoder, Array.make_val] at hpt
+    rw [getElem!_pos _ _ (by simp; omega), List.getElem_replicate] at hpt
+    cases hpt
 
 /-! ## `decoded_message` from an honest state returns the payload -/
 
@@ -630,25 +633,27 @@ theorem decodedPayload_honest {M : Type} (K : ℕ) (hKN : K ≤ 2 ^ 16) (cd : Co
   · exact Or.inl rfl
   · exact Or.inl rfl
 
-/-- **Law L2 for the code's decoder.** Adding a chunk that the polynomial code emits for `p` at
+/-- **The code's decoder is sound.** Adding a chunk that the polynomial code emits for `p` at
 any counter to a `PolyDecoder` that holds only points of `p` keeps it so, and the decoder then
-decodes nothing or `p`. -/
-theorem polyStreamDecoder_lawful {M : Type} (K : ℕ) (hK : 0 < K) (hKN : K ≤ 2 ^ 16)
+decodes nothing or `p`. `StreamDecoder.Sound.of_inv` turns this step into soundness, with the
+invariant `Inv (cd.ser p)`. -/
+theorem polyStreamDecoder_sound {M : Type} (K : ℕ) (hK : 0 < K) (hKN : K ≤ 2 ^ 16)
     (cd : Codec M K) :
-    (polyStreamDecoder K hKN cd).Lawful (ecp K hK hKN cd) where
-  honest_addChunk d p i hd := by
-    have hhon : (polyStreamDecoder K hKN cd).Honest
-        ((polyStreamDecoder K hKN cd).addChunk d ((ecp K hK hKN cd).encode p i)) p := by
-      simp only [polyStreamDecoder, ErasureCodePayload.encode, ErasureCodePayload.counterIndex,
-        ecp, ec]
-      rcases hm : (add_chunk d (toChunk (i % 2 ^ 16) (codeChunk (cd.ser p) (i % 2 ^ 16)))).match
-        with d' | _ | _
-      · exact add_chunk_inv (cd.ser p) d hd (i % 2 ^ 16) (Nat.mod_lt _ (by norm_num)) d'
-          (Result.match.isOk.mp hm)
-      · exact hd
-      · exact hd
-    exact ⟨hhon, decodedPayload_honest K hKN cd _ p hhon⟩
+    (polyStreamDecoder K hKN cd).Sound (ecp K hK hKN cd) := by
+  refine ErasureCodePayload.Streaming.StreamDecoder.Sound.of_inv (fun p d => Inv (cd.ser p) d)
+    (inv_empty K hKN cd) fun d p i hd => ?_
+  have hinv : Inv (cd.ser p)
+      ((polyStreamDecoder K hKN cd).addChunk d ((ecp K hK hKN cd).encode p i)) := by
+    simp only [polyStreamDecoder, ErasureCodePayload.encode, ErasureCodePayload.counterIndex,
+      ecp, ec]
+    rcases hm : (add_chunk d (toChunk (i % 2 ^ 16) (codeChunk (cd.ser p) (i % 2 ^ 16)))).match
+      with d' | _ | _
+    · exact add_chunk_inv (cd.ser p) d hd (i % 2 ^ 16) (Nat.mod_lt _ (by norm_num)) d'
+        (Result.match.isOk.mp hm)
+    · exact hd
+    · exact hd
+  exact ⟨hinv, decodedPayload_honest K hKN cd _ p hinv⟩
 
 end SpqrBridge.L2
 
-#print axioms SpqrBridge.L2.polyStreamDecoder_lawful
+#print axioms SpqrBridge.L2.polyStreamDecoder_sound

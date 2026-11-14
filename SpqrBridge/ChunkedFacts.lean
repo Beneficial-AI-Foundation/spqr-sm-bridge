@@ -5,6 +5,7 @@ Authors: Beneficial AI Foundation
 -/
 import SpqrBridge.ChunkedRel
 import Spqr.Specs.IncrementalMlkem768.Decaps
+import Spqr.Specs.IncrementalMlkem768.ENCAPSULATION_KEY_SIZE
 
 /-!
 # Facts about `codePrims` for the `Braid` → `Chunked` relation
@@ -18,7 +19,7 @@ succeeds. This file proves the instances that the arms of the relation use: the 
 
 namespace SpqrBridge
 
-open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
+open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states BraidModel
 open ErasureCodePayload.Streaming
 open spqr.encoding.polynomial.PolyDecoder.Insts.SpqrEncodingDecoder
 
@@ -113,14 +114,17 @@ theorem codePrims_headerSize : codePrims.headerSize = 64 :=
 theorem codePrims_macSize : codePrims.macSize = 32 := by
   simp only [codePrims, authenticator.Authenticator.MACSIZE]; rfl
 
-theorem codePrims_ct1Size (hsz : MlkemSizes) : codePrims.ct1Size = 960 :=
-  pick_eq_of ⟨_, hsz.1, rfl⟩ fun _ ⟨n, hn, e⟩ => by rw [e, ok_inj hn hsz.1]; rfl
+theorem codePrims_ct1Size : codePrims.ct1Size = 960 :=
+  pick_eq_of ⟨_, incremental_mlkem768.CIPHERTEXT1_SIZE_eq, rfl⟩ fun _ ⟨n, hn, e⟩ => by
+    rw [e, ok_inj hn incremental_mlkem768.CIPHERTEXT1_SIZE_eq]; rfl
 
-theorem codePrims_ct2Size (hsz : MlkemSizes) : codePrims.ct2Size = 128 :=
-  pick_eq_of ⟨_, hsz.2.1, rfl⟩ fun _ ⟨n, hn, e⟩ => by rw [e, ok_inj hn hsz.2.1]; rfl
+theorem codePrims_ct2Size : codePrims.ct2Size = 128 :=
+  pick_eq_of ⟨_, incremental_mlkem768.CIPHERTEXT2_SIZE_eq, rfl⟩ fun _ ⟨n, hn, e⟩ => by
+    rw [e, ok_inj hn incremental_mlkem768.CIPHERTEXT2_SIZE_eq]; rfl
 
-theorem codePrims_ekSize (hsz : MlkemSizes) : codePrims.ekSize = 1152 :=
-  pick_eq_of ⟨_, hsz.2.2, rfl⟩ fun _ ⟨n, hn, e⟩ => by rw [e, ok_inj hn hsz.2.2]; rfl
+theorem codePrims_ekSize : codePrims.ekSize = 1152 :=
+  pick_eq_of ⟨_, incremental_mlkem768.ENCAPSULATION_KEY_SIZE_eq, rfl⟩ fun _ ⟨n, hn, e⟩ => by
+    rw [e, ok_inj hn incremental_mlkem768.ENCAPSULATION_KEY_SIZE_eq]; rfl
 
 /-! ## Lengths -/
 

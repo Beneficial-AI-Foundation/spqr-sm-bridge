@@ -25,14 +25,14 @@ secure-messaging's.
 
 namespace SpqrBridge
 
-open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
+open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states BraidModel
 open ErasureCodePayload.Streaming
 
 /-- The `Braid` states over the code's encoders and decoders. -/
-abbrev BState := Braid.State encoding.polynomial.PolyEncoder encoding.polynomial.PolyDecoder
+abbrev BState := BraidModel.State encoding.polynomial.PolyEncoder encoding.polynomial.PolyDecoder
 
 /-- The secure-messaging states over the code's parameters. -/
-abbrev SMState := SPQR.Chunked.PartyState codeParams Braid.Auth
+abbrev SMState := SPQR.Chunked.PartyState codeParams BraidModel.Auth
 
 /-- A code decoder for `K` chunks that `add_chunk` and `decoded_message` accept: it needs
 `16 K` points, and its slots are sorted. -/
@@ -77,7 +77,7 @@ def SameState : BState → SMState → Prop
       ct1 = core.c1.1 ∧ EncRel 30 (by decide) (by decide) ct1Codec enc ecs ∧ d = dec ∧ DecWF 36 d
   | .ekReceivedCt1Sampled e a es ct1 hdr ek enc, .ekReceivedCt1Sampled core ecs =>
     e = core.ep ∧ a = core.authSt ∧ es = core.encapsSt.1 ∧ ct1 = core.c1.1 ∧
-      hdr = core.hdr.1 ∧ ek = core.vec.1 ∧ EncRel 30 (by decide) (by decide) ct1Codec enc ecs
+      hdr = core.hdr.1 ∧ ek = core.ek.1 ∧ EncRel 30 (by decide) (by decide) ct1Codec enc ecs
   | .ct1Acknowledged e a hdr es ct1 d, .ct1Acknowledged core dec =>
     e = core.ep ∧ a = core.authSt ∧ hdr = core.hdr.1 ∧ es = core.encapsSt.1 ∧
       ct1 = core.c1.1 ∧ d = dec ∧ DecWF 36 d

@@ -49,74 +49,70 @@ theorem transferObligations_self [DecidableEq I] (S : SCKAScheme ProbComp IK StA
 
 /-- The potential of `SPQR.correctness_error_le` is at least one on a game state whose
 correctness flag is false. -/
-theorem spqr_potential_ge_one (P : MLKEMBraid.Parameters ProbComp) [DecidableEq P.K]
+theorem spqr_potential_ge_one (P : SPQR.Parameters ProbComp) [DecidableEq P.K]
     [DecidableEq P.EpochKey] {AuthState : Type}
-    (s : SCKAScheme.GameState (SPQR.Chunked.PartyState P AuthState)
-      (SPQR.Chunked.PartyState P AuthState) P.EpochKey (SPQR.Chunked.Message P.Sym))
-    (hs : s.correct = false) :
-    1 ≤ MLKEMBraid.failurePotential (SPQR.GameState.toMLKEMBraid s) := by
-  simp [MLKEMBraid.failurePotential, SPQR.GameState.toMLKEMBraid, hs]
+    (s : SPQR.GameState P AuthState) (hs : s.correct = false) :
+    1 ≤ Braid.failurePotential s.toBraid := by
+  simp [Braid.failurePotential, SPQR.GameState.toBraid, hs]
 
 /-- The initial game states of secure-messaging's SPQR scheme satisfy the invariant of
 `SPQR.correctness_error_le` and have potential zero. -/
-theorem spqr_potential_init (P : MLKEMBraid.Parameters ProbComp) [DecidableEq P.K]
-    [DecidableEq P.EpochKey] [DecidableEq P.Sym]
-    {InitKey AuthState : Type}
+theorem spqr_potential_init (P : SPQR.Parameters ProbComp) [DecidableEq P.K]
+    [DecidableEq P.EpochKey] {InitKey AuthState : Type}
     (auth : RatchetedAuthenticator InitKey P.EpochKey AuthState
-      P.inc.PKheader (P.inc.C₁ × P.inc.C₂) P.Mac)
-    (irl : P.kem.IncrementalRandLeak P.inc) (sampleInitKey : ProbComp InitKey) :
-    ∀ ik ∈ support (SPQR.scheme P auth irl sampleInitKey).initKeyGen,
-      ∀ stA ∈ support ((SPQR.scheme P auth irl sampleInitKey).initA ik),
-      ∀ stB ∈ support ((SPQR.scheme P auth irl sampleInitKey).initB ik),
-        (MLKEMBraid.CorrectnessInv auth ik
-            (SPQR.GameState.toMLKEMBraid (initGameState stA stB)) ∧
+      P.det.PKheader (P.det.C₁ × P.det.C₂) P.Mac)
+    (sampleInitKey : ProbComp InitKey) :
+    ∀ ik ∈ support (SPQR.scheme P auth sampleInitKey).initKeyGen,
+      ∀ stA ∈ support ((SPQR.scheme P auth sampleInitKey).initA ik),
+      ∀ stB ∈ support ((SPQR.scheme P auth sampleInitKey).initB ik),
+        (Braid.CorrectnessInv auth ik (SPQR.GameState.toBraid (initGameState stA stB)) ∧
           SPQR.Ct1AckInv (initGameState stA stB)) ∧
-        MLKEMBraid.failurePotential (SPQR.GameState.toMLKEMBraid (initGameState stA stB)) = 0 := by
+        Braid.failurePotential (SPQR.GameState.toBraid (initGameState stA stB)) = 0 := by
   intro ik _ stA hA stB hB
   simp only [SPQR.scheme, mem_support_pure_iff] at hA hB
   subst hA hB
-  refine ⟨⟨Or.inr ⟨_, MLKEMBraid.transcriptConsistent_initGameState auth ik⟩, ?_⟩, ?_⟩
+  refine ⟨⟨Or.inr ⟨_, Braid.transcriptConsistent_initGameState (P := P.toBraid) auth ik⟩,
+    ?_⟩, ?_⟩
   · intro party n msg tsnd h
-    cases party <;> simp [SCKAScheme.initGameState] at h
-  · change MLKEMBraid.failurePotential
-      (SCKAScheme.initGameState (MLKEMBraid.initA P auth ik) (MLKEMBraid.initB P auth ik)) = 0
-    simp [MLKEMBraid.failurePotential, MLKEMBraid.currentEpochFailure,
-      MLKEMBraid.pairFailure, SCKAScheme.initGameState, MLKEMBraid.initA, MLKEMBraid.initB,
-      MLKEMBraid.State.controlPosition, MLKEMBraid.State.epoch]
+    cases party <;> simp [SCKAScheme.initGameState, SPQR.GameState.messagesAt] at h
+  · change Braid.failurePotential
+      (SCKAScheme.initGameState (Braid.initA P.toBraid auth ik)
+        (Braid.initB P.toBraid auth ik)) = 0
+    simp [Braid.failurePotential, Braid.currentEpochFailure,
+      Braid.pairFailure, SCKAScheme.initGameState, Braid.initA, Braid.initB,
+      Braid.State.controlPosition, Braid.State.epoch]
 
 /-- Let `S₁` be an SCKA scheme with the epoch keys of secure-messaging's SPQR scheme, related to
 that scheme through `TransferObligations` with the invariant of `SPQR.correctness_error_le`. With
-lawful stream decoders, every adversary against `S₁` making at most `q` send queries causes a false
+sound stream decoders, every adversary against `S₁` making at most `q` send queries causes a false
 correctness flag with probability at most `q` times the KEM correctness error. -/
 theorem spqr_correctness_error_le_of_transfer
-    (P : MLKEMBraid.Parameters ProbComp) [DecidableEq P.K]
-    [DecidableEq P.EpochKey] [DecidableEq P.Sym]
+    (P : SPQR.Parameters ProbComp) [DecidableEq P.K] [DecidableEq P.EpochKey]
     {InitKey AuthState : Type}
     (auth : RatchetedAuthenticator InitKey P.EpochKey AuthState
-      P.inc.PKheader (P.inc.C₁ × P.inc.C₂) P.Mac)
-    (irl : P.kem.IncrementalRandLeak P.inc)
+      P.det.PKheader (P.det.C₁ × P.det.C₂) P.Mac)
     (sampleInitKey : ProbComp InitKey)
-    (hHdrLawful : P.decHdr.Lawful P.ecpHdr)
-    (hEkLawful : P.decEk.Lawful P.ecpEk)
-    (hCt1Lawful : P.decCt1.Lawful P.ecpCt1)
-    (hCt2Lawful : P.decCt2.Lawful P.ecpCt2)
+    (hHdrSound : P.decHdr.Sound P.ecpHdr)
+    (hEkSound : P.decEk.Sound P.ecpEk)
+    (hCt1Sound : P.decCt1.Sound P.ecpCt1)
+    (hCt2Sound : P.decCt2.Sound P.ecpCt2)
     {IK₁ StA₁ StB₁ Rho₁ Rand₁ : Type}
     (S₁ : SCKAScheme ProbComp IK₁ StA₁ StB₁ P.EpochKey Rho₁ Rand₁)
     (RA : StA₁ → SPQR.Chunked.PartyState P AuthState → Prop)
     (RB : StB₁ → SPQR.Chunked.PartyState P AuthState → Prop)
     (RM : Rho₁ → SPQR.Chunked.Message P.Sym → Prop)
-    (hob : TransferObligations S₁ (SPQR.scheme P auth irl sampleInitKey)
-      (fun ik s => MLKEMBraid.CorrectnessInv auth ik (SPQR.GameState.toMLKEMBraid s) ∧
+    (hob : TransferObligations S₁ (SPQR.scheme P auth sampleInitKey)
+      (fun ik s => Braid.CorrectnessInv auth ik (SPQR.GameState.toBraid s) ∧
         SPQR.Ct1AckInv s) RA RB RM)
     (adv : SCKACorrectnessAdversary Rho₁) (q : ℕ) (hq : SendQueryBound adv q) :
     1 - Pr{let x ← correctnessExp S₁ adv}[x = true] ≤
-      (q : ℝ≥0∞) * P.kem.correctnessError ProbCompRuntime.probComp := by
-  refine correctness_error_le_of_transfer S₁ (SPQR.scheme P auth irl sampleInitKey) _
-    (fun s => MLKEMBraid.failurePotential (SPQR.GameState.toMLKEMBraid s)) _
-    (spqr_potential_ge_one P) (spqr_potential_init P auth irl sampleInitKey)
-    (SPQR.correctnessImpl_preserves_correctnessInv auth irl sampleInitKey
-      hHdrLawful hEkLawful hCt1Lawful hCt2Lawful)
-    (fun ik t s hs => SPQR.wp_failurePotential_query_le auth irl sampleInitKey
-      hHdrLawful hEkLawful hCt1Lawful hCt2Lawful ik t s hs.1 hs.2) RA RB RM hob adv q hq
+      (q : ℝ≥0∞) * P.det.toKEM.correctnessError ProbCompRuntime.probComp := by
+  refine correctness_error_le_of_transfer S₁ (SPQR.scheme P auth sampleInitKey) _
+    (fun s => Braid.failurePotential (SPQR.GameState.toBraid s)) _
+    (spqr_potential_ge_one P) (spqr_potential_init P auth sampleInitKey)
+    (SPQR.correctnessImpl_preserves_correctnessInv auth sampleInitKey
+      hHdrSound hEkSound hCt1Sound hCt2Sound)
+    (fun ik t s hs => SPQR.wp_failurePotential_query_le auth sampleInitKey
+      hHdrSound hEkSound hCt1Sound hCt2Sound ik t s hs.1 hs.2) RA RB RM hob adv q hq
 
 end SpqrBridge
