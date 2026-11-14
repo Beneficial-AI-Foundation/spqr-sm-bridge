@@ -1,0 +1,282 @@
+% SpqrBridge slides, randomness.
+% Build: latexmk -lualatex slides.tex
+\input{../common/preamble}
+
+\title{From a deterministic extraction to a probability bound}
+\subtitle{SpqrBridge slides, randomness}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \centering
+  {\footnotesize\textcolor{trustc}{spqr-verify has no probabilities, and secure-messaging bounds a probability. How does the bridge connect them?}}
+\end{frame}
+
+\begin{frame}[t]{Two worlds, one missing fact}
+  \vspace{0.8em}
+  \centering
+  \begin{tikzpicture}[scale=0.85, transform shape, every node/.append style={font=\scriptsize}]
+    \node[impl, text width=5.6cm, align=left, font=\scriptsize] (l) at (0, 0) {%
+      \textbf{spqr-verify: no probabilities}\\[3pt]
+      \code{States.send i₁ i₂ s rng}\\
+      \code{\ \ = ok (.Ok out, rng')}\\[3pt]
+      The RNG is a value \code{rng} of any type \code{R}.\\
+      A theorem holds for every \code{rng}.};
+    \node[spec, text width=5.6cm, align=left, font=\scriptsize] (r) at (10.4, 0) {%
+      \textbf{secure-messaging: \code{ProbComp}}\\[3pt]
+      \code{sendA : St → ProbComp (Option …)}\\
+      \code{correctnessExp : ProbComp Bool}\\[3pt]
+      Each send samples.\\
+      $1 - \Pr[\text{ok}] \le q\varepsilon$.};
+    \node[gap, text width=2.6cm, font=\scriptsize] (g) at (5.2, 0) {How is \code{rng}\\distributed?};
+    \draw[gapc, dashed, thick] (l) -- (g) -- (r);
+  \end{tikzpicture}
+  \vspace{1.4em}
+
+  \raggedright
+  \begin{itemize}\footnotesize\setlength{\itemsep}{0.5em}
+    \item The extraction is deterministic. A probability bound needs a distribution on the RNG.
+    \item The bridge models the RNG as an \emph{oracle}: a send calls \code{fill\_bytes}, and
+      the game answers each call with uniform bytes.
+    \item Only \code{send} reads random bytes. \code{recv} is a plain function.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{Three layers of one send}\label{fr:layers}
+  \vspace{0.6em}
+  \centering
+  \begin{tikzpicture}[scale=0.85, transform shape, every node/.append style={font=\scriptsize},
+      layer/.style={text width=4.0cm, minimum height=3.5cm, align=left, font=\scriptsize}]
+    \node[impl, layer] (a) at (0, 0) {%
+      \textbf{Layer 1: \code{States.send}}\\
+      \textcolor{realc}{spqr-verify, extracted}\\[3pt]
+      \code{States.send i₁ i₂ s rng}\\
+      \code{\ \ = ok (.Ok out, rng')}\\[3pt]
+      The RNG is an argument \code{rng} of any type \code{R}, with its \code{fill\_bytes}.};
+    \node[proof, layer] (b) at (5.6, 0) {%
+      \textbf{Layer 2: \code{sendProg}}\\
+      \textcolor{proofc}{this repository, adapter}\\[3pt]
+      \code{sendProg s : OracleComp}\\
+      \code{\ \ fillSpec (buf × Result ..)}\\[3pt]
+      One program. Its only oracle is \code{fill\_bytes}.};
+    \node[proof, layer] (c) at (11.2, 0) {%
+      \textbf{Layer 3: \code{codeSendA}}\\
+      \textcolor{proofc}{this repository, adapter}\\[3pt]
+      \code{codeSendA s := do}\\
+      \code{\ \ let p ← simulateQ}\\
+      \code{\ \ \ \ unifImpl (sendProg s)}\\
+      \code{\ \ pure (stepOf p.2)}\\[3pt]
+      The oracle answers with uniform bytes.};
+    \draw[proved] (a) -- node[above, label, text=proofc] {equal} (b);
+    \draw[flow] (b) -- node[above, label] {uniform\\oracle} (c);
+    \draw[decorate, decoration={brace, amplitude=5pt, mirror}, realc, thick]
+      ($(a.south west)+(0,-0.15)$) -- ($(b.south east)+(0,-0.15)$)
+      node[midway, below=5pt, label, text=realc] {no probabilities: the RNG is abstract};
+    \draw[decorate, decoration={brace, amplitude=5pt, mirror}, proofc, thick]
+      ($(c.south west)+(0,-0.15)$) -- ($(c.south east)+(0,-0.15)$)
+      node[midway, below=5pt, label, text=proofc] {random: a \code{ProbComp}};
+  \end{tikzpicture}
+  \vspace{0.4em}
+
+  \raggedright
+  \begin{itemize}\footnotesize\setlength{\itemsep}{0.5em}
+    \item \code{send\_eq\_prog} (proved): layer 2, run with any RNG, is layer 1.
+    \item In layer 2, only the calls to \code{fill\_bytes} are written by hand. The rest is the
+      extracted code.
+    \item The game and the theorem use layer 3.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{Where the code starts running in \code{ProbComp}}\label{fr:lift}
+  \footnotesize A send of the code: \code{codeSendA s = do let b ← sampleBuf s; pure (sendStep s b)}\\[0.2em]
+  Only \code{sampleBuf}, the uniform answer of the oracle, is random. The rest is a function of $b$.
+  \vspace{0.2em}
+
+  \centering
+  \begin{tikzpicture}[scale=0.8, transform shape, every node/.append style={font=\scriptsize},
+      stage/.style={minimum height=1.0cm, font=\scriptsize}]
+    \node[proof, stage, text width=2.2cm] (tape) at (0, 0) {\code{sampleBuf s}\\64, 32 or 0 uniform bytes $b$};
+    \node[impl, stage, text width=3.4cm] (run) at (4.1, 0) {\code{States.send}, whose \code{fill\_bytes}\\returns $b$, in \code{Result}};
+    \node[impl, stage, text width=2.8cm] (cls) at (8.2, 0) {\code{Ok} $\mapsto$ \code{some}\\\code{Err}, panic,\\divergence $\mapsto$ \code{none}};
+    \node[spec, stage, text width=2.0cm] (out) at (11.6, 0) {SCKA output};
+    \draw[flow, proofc] (tape) -- node[above, label, text=proofc] {$b$} (run);
+    \draw[flow, realc] (run) -- (cls);
+    \draw[flow, realc] (cls) -- (out);
+    \draw[decorate, decoration={brace, amplitude=5pt}, proofc, thick]
+      ($(tape.north west |- cls.north)+(0,0.15)$) -- ($(tape.north east |- cls.north)+(0,0.15)$)
+      node[midway, above=5pt, label, text=proofc] {random};
+    \draw[decorate, decoration={brace, amplitude=5pt}, realc, thick]
+      ($(run.north west |- cls.north)+(0,0.15)$) -- ($(out.north east |- cls.north)+(0,0.15)$)
+      node[midway, above=5pt, label, text=realc] {deterministic: \code{sendStep s b}};
+  \end{tikzpicture}
+  \vspace{0.3em}
+
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize},
+      col/.style={text width=4.3cm, align=left, anchor=north, font=\scriptsize},
+      head/.style={font=\scriptsize\bfseries, anchor=south}]
+    \node[head, text=realc] at (0, 0) {spqr-verify};
+    \node[head, text=proofc] at (4.8, 0) {this repository};
+    \node[head, text=refc] at (9.6, 0) {secure-messaging (SM)};
+    \node[col] at (0, -0.05) {%
+      Open, \#785 \code{send\_total}: if $b$ has length \code{sendLen s}, a reachable send
+      returns \code{Ok}.\\[2pt]
+      Open, \#787 \code{send\_refines\_bytes}: the matching \code{Braid} step uses the bytes
+      $b$.};
+    \node[col] at (4.8, -0.05) {%
+      \code{codeSend\_eq\_some\_iff}: \code{some} iff \code{Ok}.\\[2pt]
+      \code{send\_eq\_prog}: the program is the extracted code.\\[2pt]
+      \code{send\_chunked}: on the same $b$, the sends give related results.};
+    \node[col] at (9.6, -0.05) {%
+      \code{SPQR.Chunked.send} samples its own bytes. With \code{codeParams}: 64 or 32 bytes.};
+    \draw[trustc, dashed] (2.4, 0.3) -- (2.4, -1.6);
+    \draw[trustc, dashed] (7.2, 0.3) -- (7.2, -1.6);
+  \end{tikzpicture}
+\end{frame}
+
+\begin{frame}[t]{``Some randomness'' is not enough}
+  \vspace{0.2em}
+  \centering
+  \begin{tikzpicture}[scale=0.85, transform shape, every node/.append style={font=\scriptsize}]
+    \node[proof, text width=7.2cm, align=left, font=\scriptsize] (a) at (0, 0) {%
+      \textbf{proved}: \code{send\_refines}\\[2pt]
+      If the code's send returns \code{Ok}, then for \emph{some} bytes $r$ the step
+      \code{Braid.send σ r} gives a related state, the same message and the same key.};
+    \node[gap, text width=7.2cm, align=left, font=\scriptsize] (b) at (8.6, 0) {%
+      \textbf{open, \#787}: \code{send\_refines\_bytes}\\[2pt]
+      The same, with $r$ named: $r$ is the buffer that \code{fill\_bytes} returned to the
+      code.};
+  \end{tikzpicture}
+  \vspace{0.5em}
+
+  \begin{tikzpicture}[scale=0.85, transform shape, every node/.append style={font=\scriptsize}]
+    \draw[thick, proofc, fill=proofc!10] (0, 0) rectangle (12.8, 0.5);
+    \foreach \i in {1,...,63} { \draw[proofc!40] (0.2*\i, 0) -- (0.2*\i, 0.5); }
+    \node[label, text=proofc, anchor=east] at (-0.2, 0.25) {answer};
+    \node[label, text=trustc] at (0, -0.25) {0};
+    \node[label, text=trustc] at (12.8, -0.25) {64};
+    \draw[decorate, decoration={brace, amplitude=5pt}, realc, thick] (0, 0.65) -- (12.8, 0.65)
+      node[midway, above=5pt, label, text=realc] {\code{KeysUnsampled}: \code{KeyGen} asks for 64 bytes};
+    \draw[thick, proofc, fill=proofc!10] (0, -1.3) rectangle (6.4, -0.8);
+    \foreach \i in {1,...,31} { \draw[proofc!40] (0.2*\i, -1.3) -- (0.2*\i, -0.8); }
+    \node[label, text=proofc, anchor=east] at (-0.2, -1.05) {answer};
+    \node[label, text=trustc] at (0, -1.55) {0};
+    \node[label, text=trustc] at (6.4, -1.55) {32};
+    \node[label, text=realc, anchor=west] at (6.7, -1.05) {\code{HeaderReceived}: \code{Encaps1} asks for 32 bytes};
+    \node[label, text=trustc, anchor=west] at (13.1, 0.25) {the other nine\\states: no call};
+  \end{tikzpicture}
+  \vspace{0.3em}
+
+  \raggedright
+  \begin{itemize}\footnotesize\setlength{\itemsep}{0.5em}
+    \item \code{send\_refines} also holds for a code that ignores its RNG: take its fixed bytes
+      as $r$. So it gives no distribution for $r$.
+    \item With $r$ the answer of the uniform oracle, \code{KeyGen} and \code{Encaps1} run on
+      uniform bytes, as in SM's model.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{Coupling the two sends on one sample}
+  \footnotesize
+  A \emph{coupling} is one experiment that runs both sends, and keeps the distribution of each.
+
+  \centering
+  \begin{tikzpicture}[scale=0.85, transform shape, every node/.append style={font=\scriptsize}]
+    \node[proof, text width=5.4cm] (t) at (4.3, 1.5) {$t \leftarrow$ \code{sampleB n}, one sample of $n$ bytes};
+    \node[impl, minimum width=1.3cm] (s) at (-1.6, 0.2) {$s$};
+    \node[spec, minimum width=1.3cm] (st) at (-1.6, -1.5) {$\mathit{st}$};
+    \node[impl, text width=3.6cm] (cs) at (3.0, 0.2) {code: \code{sendStep s t}};
+    \node[spec, text width=3.6cm] (ss) at (5.6, -1.5) {SM: \code{Chunked.send} on $t$};
+    \node[impl, text width=2.2cm] (co) at (10.2, 0.2) {$s',\ m,\ k$};
+    \node[spec, text width=2.2cm] (so) at (10.2, -1.5) {$\mathit{st}',\ m',\ k'$};
+    \draw[flow, realc] (s) -- (cs);
+    \draw[flow, refc] (st) -- (ss);
+    \draw[flow, realc] (cs) -- (co);
+    \draw[flow, refc] (ss) -- (so);
+    \draw[flow, proofc] ([xshift=-1.3cm]t.south) -- ([xshift=-1.3cm]t.south |- cs.north);
+    \draw[flow, proofc] ([xshift=1.3cm]t.south) -- ([xshift=1.3cm]t.south |- ss.north);
+    \draw[rel] (s) -- node[left, label, text=proofc] {$RA$} (st);
+    \draw[rel] (co) -- (so);
+    \node[label, text=proofc, anchor=west] at (11.7, -0.65) {\code{SendRel}:\\$RA$, $RM$, equal\\keys, every $t$};
+  \end{tikzpicture}
+  \vspace{0.3em}
+
+  \raggedright
+  \begin{itemize}\footnotesize\setlength{\itemsep}{0.5em}
+    \item \code{send\_chunked}: \code{RelTriple (codeSendA s) (sendA st) (SendRel RA RM)}.
+    \item Both sends use the same sample $t$. SM's send samples $n = 64$ or $n = 32$ bytes, as
+      the code does, because \code{codeParams} builds SM's \code{KeyGen} and \code{Encaps1}
+      from the code's primitives. With $n = 0$, neither side samples.
+    \item The transfer theorem needs this coupling to move SM's bound to the code (main deck,
+      ``Moving the bound to the code'').
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{Failure, the real RNG, and leaked randomness}
+  \vspace{0.3em}
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize},
+      key/.style={text width=1.9cm, minimum height=1.25cm, font=\scriptsize},
+      what/.style={box, draw=ink!40, fill=paper, text width=10.4cm, minimum height=1.25cm,
+        align=left, font=\scriptsize}]
+    \node[impl, key] (f) at (0, 0) {\textbf{failure}\\in Lean};
+    \node[what, right=0.2cm of f] {The adapter maps \code{Ok} to \code{some}, and an error, a panic
+      or divergence to \code{none}. \code{send\_total} (open, \#785) rules out \code{none} on a
+      reachable send, for a buffer of length \code{sendLen s}. It does not say that
+      \code{fill\_bytes} succeeds.};
+    \node[trust, key] (r) at (0, -1.75) {\textbf{real RNG}\\assumed};
+    \node[what, right=0.2cm of r] {Given the earlier calls, \code{unifImpl} answers each call
+      with uniform bytes. \code{IdealRng} states this assumption in Lean for a generator (next
+      slide). No theorem connects it to \code{OsRng}.};
+    \node[gap, key] (s) at (0, -3.5) {\textbf{security}\\later};
+    \node[what, right=0.2cm of s] {The security game leaks the randomness of a send
+      (\code{codeSendRleak}). The coupling above ignores the leak. The security proof needs the
+      joint distribution of leak, message, key and next state.};
+  \end{tikzpicture}
+  \vspace{0.8em}
+
+  \raggedright
+  \begin{itemize}\footnotesize\setlength{\itemsep}{0.5em}
+    \item The first row is a premise of the theorem. The second row is a hypothesis of
+      \code{real\_correctness\_error\_le}, and \code{OsRng} stays outside it.
+    \item The third row is open work for the transfer of the security proof.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[t]{The RNG assumption as a Lean hypothesis}
+  \vspace{0.2em}
+  \centering
+  \begin{tikzpicture}[every node/.append style={font=\scriptsize},
+      n/.style={text width=3.5cm, align=left, font=\scriptsize, minimum height=1.3cm},
+      scale=0.9, transform shape]
+    \node[proof, n] (t) at (8.0, 0) {\code{idealRng\_tape}: a uniform tape meets
+      \code{IdealRng}.};
+    \node[trust, n] (h) at (4.0, 0) {\code{IdealRng i₁ seed 64}: from a sampled state, the
+      generator answers every program of at most 64 bytes like \code{unifImpl}.};
+    \node[proof, n] (p) at (0, 0) {\code{send\_eq\_prog}: the extracted \code{send} is the
+      oracle program, for every RNG.};
+    \node[proof, n] (b) at (0, -2.0) {\code{send\_bridge}:\\\code{realSendA i₁ i₂ seed s}
+      $=^d$ \code{codeSendA s}.};
+    \node[proof, n] (e) at (4.0, -2.0) {\code{realScheme\_}\\\code{correctnessExp}: the two correctness
+      experiments have equal distributions.};
+    \node[proof, n] (r) at (8.0, -2.0) {\code{real\_correctness\_error\_le}: the bound
+      $q \cdot \varepsilon$ for \code{realScheme}.};
+    \draw[flow, dashed] (t) -- (h);
+    \draw[flow] (h) -- (b);
+    \draw[flow] (p) -- (b);
+    \draw[flow] (b) -- (e);
+    \draw[flow] (e) -- (r);
+  \end{tikzpicture}
+  \vspace{0.4em}
+
+  \raggedright
+  \begin{itemize}\footnotesize\setlength{\itemsep}{0.3em}
+    \item \code{realScheme} samples a new state from \code{seed} for each send and drops the
+      final state. This choice is part of the scheme. It is not a theorem.
+    \item A tape of 64 bytes cannot answer two sends of 64 bytes. So the result does not cover
+      one generator over a whole run.
+    \item No theorem connects \code{IdealRng} to \code{OsRng}.
+  \end{itemize}
+\end{frame}
+
+\end{document}

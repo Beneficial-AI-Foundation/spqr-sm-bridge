@@ -8,8 +8,8 @@ import SpqrBridge.EpochBound
 /-!
 # Keys from `send` and `recv` have 32 bytes
 
-`codeSend_key_length` and `codeRecv_key_length` prove the `send_key_length` and
-`recv_key_length` fields of `BridgeObligations`, for every state, tape and message.
+`codeSend_key_length` and `codeRecv_key_length`: for every state, buffer and message, each key
+that `codeSend` or `codeRecv` returns has a 32-byte secret.
 
 Only two transitions emit a key (`send_key_epoch`, `recv_key_epoch`): `send` from
 `HeaderReceived` (`send_ct1`) and `recv` of the last `Ct2` chunk in `EkSentCt1Received`
@@ -95,21 +95,21 @@ theorem recv_ct2_chunk_secret_length (self : v1.chunked.send_ek.EkSentCt1Receive
       obtain ⟨-, rfl⟩ := h
       exact recv_ct2_secret_length _ _ _ hr
 
-/-- Every key that a successful `codeSend` returns has a 32-byte secret. -/
-theorem codeSend_key_length : ∀ (s : States) (tape : List Std.U8) (out : v1.chunked.states.Send),
-    codeSend s tape = some out → ∀ es ∈ out.key, es.secret.val.length = 32 := by
-  intro s tape out h es hes
+/-- Let `codeSend s buf = some out`. Then each `es` in `out.key` has `es.secret.length = 32`. -/
+theorem codeSend_key_length : ∀ (s : States) (buf : Slice Std.U8) (out : v1.chunked.states.Send),
+    codeSend s buf = some out → ∀ es ∈ out.key, es.secret.val.length = 32 := by
+  intro s buf out h es hes
   obtain ⟨rng', hs⟩ := codeSend_some h
   have hk : out.key = some es := hes
   obtain ⟨st, -, rfl, -⟩ := send_key_epoch _ _ _ _ _ _ _ hs hk
   simp only [States.send, Result.bind_eq_ok, Prod.exists, uncurry_apply_pair, Result.ok.injEq,
-    Prod.mk.injEq, core.result.Result.Ok.injEq, exists_eq_right_right] at hs
-  obtain ⟨_, -, _, _, _, hc, rfl⟩ := hs
+    Prod.mk.injEq, core.result.Result.Ok.injEq] at hs
+  obtain ⟨_, -, _, _, _, _, hc, rfl, -⟩ := hs
   simp only [Option.some.injEq] at hk
   subst hk
   exact send_ct1_chunk_secret_length _ _ _ _ hc
 
-/-- Every key that a successful `codeRecv` returns has a 32-byte secret. -/
+/-- Let `codeRecv s msg = some out`. Then each `es` in `out.key` has `es.secret.length = 32`. -/
 theorem codeRecv_key_length : ∀ (s : States) (msg : Message) (out : v1.chunked.states.Recv),
     codeRecv s msg = some out → ∀ es ∈ out.key, es.secret.val.length = 32 := by
   intro s msg out h es hes

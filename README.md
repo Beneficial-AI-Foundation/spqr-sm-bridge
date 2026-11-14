@@ -16,8 +16,9 @@ functions that the code calls. Both lists are in [Assumptions](#assumptions).
 
 Let `sampleInitKey` sample initial keys that the code accepts. Let `adv` be an SCKA correctness
 adversary that makes at most `q` send queries across both parties, with `q + 2 < 2^64`. Let `codeScheme`
-be the code's chunked `States` machine, presented as an SCKA scheme. Each send draws 64 uniform
-random bytes, independent of earlier sends, and the code reads at most 64 of them. Then
+be the code's chunked `States` machine, presented as an SCKA scheme. The RNG of a send is an
+oracle for `fill_bytes`. Given the earlier calls, the game answers each call with uniform bytes. A send calls it once for 64 bytes (key generation), once for 32 bytes (`Encaps1`), or not
+at all. Then
 
 ```text
 1 - Pr[ correctnessExp (codeScheme sampleInitKey) adv = true ]  ≤  q · ε
@@ -33,6 +34,14 @@ theorem code_correctness_error_le (hB : BridgeObligations) (sampleInitKey : Prob
       (q : ℝ≥0∞) * codeKem.correctnessError ProbCompRuntime.probComp
 ```
 
+`real_correctness_error_le` (`SpqrBridge/RealScheme.lean`) gives the same bound for
+`realScheme`. In `realScheme`, each send samples a new generator state from `seed`, runs the
+extracted `States.send`, and drops the final generator state. No state passes from one send to
+the next. The leaking sends of `realScheme` are those of `codeScheme`. The theorem has one more
+hypothesis, `IdealRng i₁ seed 64`: from a state that `seed` samples, the generator answers every
+program that asks for at most 64 bytes like the uniform oracle. A uniform tape meets this
+hypothesis (`idealRng_tape`).
+
 The correctness experiment is Def. 3.1 of [ADJKS25]: monotonic, matching and unique epochs,
 consistent keys, and a known prefix. The adversary delivers unmodified recorded messages, in any
 order and with replay. It does not inject messages.
@@ -45,8 +54,8 @@ The proof composes three relations:
    abstract machine `Braid` that follows ML-KEM Braid [MLKEMBraid], with the code's deviations.
    Its proved theorems, `send_refines` and `recv_refines`, cover one direction: a step of the code
    that succeeds refines a `Braid` step, for some randomness. The bound needs more: `send` does not
-   fail, its randomness is the prefix of the bytes it read, and the code accepts every message of
-   the same run that `Braid` accepts. These are the fields `send_total`, `send_refines_tape` and `recv_complete` of
+   fail, its randomness is the bytes that `fill_bytes` returned, and the code accepts every message
+   of the same run that `Braid` accepts. These are the fields `send_total`, `send_refines_bytes` and `recv_complete` of
    `BridgeObligations`. So the part of step 1 that the theorem uses is assumed, not proved, and
    `code_correctness_error_le` does not use `send_refines` or `recv_refines`.
 2. **`Braid` to `SPQR.Chunked`.** This repository relates `Braid` to secure-messaging's model
@@ -94,9 +103,9 @@ SparsePostQuantumRatchet-verify:
 | Field | Statement | Issue |
 |---|---|---|
 | `mlkem_sizes` | libcrux reports the ML-KEM-768 sizes 960 (`ct1`), 128 (`ct2`) and 1152 (encapsulation key) | [#786](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/786) |
-| `send_total` | on a reachable state whose epoch plus one fits in a `u64`, `send` with at least 64 bytes of randomness succeeds | [#785](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/785) |
+| `send_total` | on a reachable state whose epoch plus one fits in a `u64`, `send` succeeds when `fill_bytes` returns a buffer of the length that the send asks for | [#785](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/785) |
 | `recv_complete` | on a reachable state that refines a `Braid` state, for a message that the other party sent in the same run, whose epoch plus one fits in a `u64` and that `Braid` accepts, `recv` succeeds with a state that refines `Braid`'s next state and with the same key | [#785](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/785) |
-| `send_refines_tape` | on a reachable state whose epoch plus one fits in a `u64`, a successful `send` with 64 bytes of randomness takes the `Braid` step whose randomness is the prefix of the bytes that the code read: the next states are related, and the message and key are the same | [#787](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/787) |
+| `send_refines_bytes` | on a reachable state whose epoch plus one fits in a `u64`, a successful `send` takes the `Braid` step whose randomness is the bytes that `fill_bytes` returned, for a buffer of the length that the send asks for: the next states are related, and the message and key are the same | [#787](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/issues/787) |
 
 The exact statements are the fields of `BridgeObligations` in `SpqrBridge/CodeBound.lean`.
 
@@ -104,8 +113,9 @@ Nobody has shown yet that the four fields hold together. If one is false, the th
 nothing. To lower that risk, the fields about `send` and `recv` take the premises that the proof
 can supply from the code-side game invariant `CodeGameInv`. The state is reachable
 (`ReachParty`): a run of the code's own sends, and receives of sent messages (`CodeReach`), ends
-in it. The epochs leave room for one more, as the table states. `send_refines_tape` covers only
-64-byte tapes. `recv_complete` covers only messages that the other party sent in the same run
+in it. The epochs leave room for one more, as the table states. `send_total` and
+`send_refines_bytes` cover only buffers of the length that the send asks for (`sendLen`): 64, 32
+or 0 bytes. `recv_complete` covers only messages that the other party sent in the same run
 (`ReachRecv`).
 
 ### Axioms
@@ -137,10 +147,19 @@ trusted, and Lean does not list them:
 - **Total wrappers.** `pick` and `fit` (`SpqrBridge/CodePrims.lean`) make the code's primitives
   total. Outside the inputs on which the code succeeds, they return an arbitrary value or zeros.
   `SpqrBridge/CodeContracts.lean` proves that the code's results match them on those inputs.
-- **The adapter.** `codeScheme` (`SpqrBridge/Adapter.lean`) gives each send 64 fresh uniform bytes,
-  not the output of a real random number generator. It maps an Aeneas panic, a divergence and a
-  Rust `Err` to a refused call. A refused send leaves the game unchanged. So `send_total` is
-  necessary: without it, a code that refuses every send also meets the bound.
+- **The RNG.** The theorem assumes an ideal RNG (`unifImpl`). Given the earlier calls, each call
+  of `fill_bytes` returns uniform bytes of the requested length. SM makes the same assumption.
+  `real_correctness_error_le` states it in Lean, as the hypothesis `IdealRng i₁ seed 64` on a
+  generator. Two steps stay outside Lean. First, that `OsRng` behaves like a generator that
+  meets `IdealRng`. libsignal passes `rand::rngs::OsRng`, which calls `getrandom`. `IdealRng` is
+  an exact equality of distributions, and no theorem connects it to the kernel source. Second,
+  that each send starts from a new generator state, independent of the earlier sends.
+  `realScheme` makes this choice. A new `OsRng` handle does not reset the kernel source. The calls to `fill_bytes` in a send (`sendBuf`) are written by
+  hand. `send_eq_prog` (`SpqrBridge/RngMonad.lean`) proves that they agree with the extracted
+  code, for an RNG of any type.
+- **Refused calls.** The adapter maps an Aeneas panic, a divergence and a Rust `Err` to a refused call. A refused send leaves the
+  game unchanged. So `send_total` is necessary: without it, a code that refuses every send also
+  meets the bound.
 - **The extraction and the tools.** Charon, Aeneas and its library, VCVio and Lean. The extraction
   was edited by hand (see [Limits](#limits)).
 
@@ -232,8 +251,9 @@ Its premises must show:
 - On an injected message, the code and secure-messaging both accept or both refuse. The parsers
   and serializers agree.
 - The exposure oracles correspond: corrupted states, leaked randomness and challenge keys. The
-  current send coupling ignores the leaked randomness. This includes the tape bytes that the code
-  does not read.
+  current send coupling ignores the leaked randomness. The code's leak is the buffer that
+  `fill_bytes` returned. In the two sampling states it has the same bytes as the leak of
+  secure-messaging, but nothing proves this yet.
 - The assumptions on the primitives, for example that HMAC is a PRF, hold for the code's
   primitives. Today these primitives are opaque.
 
@@ -269,6 +289,9 @@ lake build
 | `CodeCorrectness.lean` | the theorem |
 | `CodeBound.lean` | `BridgeObligations`, the code-side game invariant, the budgeted transfer statement |
 | `Adapter.lean`, `EpochBound.lean` | the code as an SCKA scheme, and its epoch bound |
+| `RngMonad.lean` | the send program is equal to the extracted `send`, for every RNG |
+| `IdealRng.lean` | the assumption `IdealRng` on the generator. `send_bridge`: under it, one extracted `send` from a sampled state has the distribution of `codeSendA`. `idealRng_tape`: a uniform tape meets it |
+| `RealScheme.lean` | `realScheme`: each send runs the extracted `send` from a new generator state. `real_correctness_error_le`: the bound for it under `IdealRng` |
 | `CodePrims.lean`, `CodeParams.lean` | the code's primitives, and secure-messaging parameters built from them |
 | `ChunkedRel.lean`, `ChunkedSend*.lean`, `ChunkedRecv*.lean` | the relation between `Braid` and `SPQR.Chunked`, with every arm |
 | `PolyDecoderLawful.lean`, `PolyEncoderChunk.lean`, `NextChunkWrap.lean` | the Rust erasure code against secure-messaging's interface |

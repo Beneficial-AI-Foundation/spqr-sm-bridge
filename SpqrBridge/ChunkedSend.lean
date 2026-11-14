@@ -9,10 +9,10 @@ import SpqrBridge.NextChunkWrap
 /-!
 # The send arms of `Braid` → `Chunked`
 
-`sendRel_of_braid` reduces the send obligation `SendRel RA RM` for one tape to a step of the
-abstract machine: `Braid.send` on the tape prefix that the code reads agrees with the result of
+`sendRel_of_braid` reduces the send obligation `SendRel RA RM` for one buffer to a step of the
+abstract machine: `Braid.send` on the bytes that `fill_bytes` returned agrees with the result of
 `Chunked.send` (`SendAgree`). The code side follows from the `BridgeObligations` fields
-`send_total` and `send_refines_tape`, and from the theorem `codeSend_key_length`. The encoder
+`send_total` and `send_refines_bytes`, and from the theorem `codeSend_key_length`. The encoder
 steps use the theorem `next_chunk_wrap`.
 -/
 
@@ -51,22 +51,25 @@ def SendAgree (b : BState × Msg encoding.Chunk × Option Key)
     BPayloadRel b.2.1.payload res.msg.payload ∧
     b.2.2 = res.outputKey.map (fun k => (k.1, k.2.1)) ∧ res.sendingEpoch = b.2.1.epoch - 1
 
-/-- Let `s` be reachable, refine `σ` and have epoch headroom, and let `t` be a tape. If
-`Braid.send` on the prefix of `t` that the code reads agrees with `res`, then the code's send
-with tape `t` and `res` are related by `SendRel RA RM`. -/
+/-- Assume `BridgeObligations`. Let `ReachParty s n`, `Refines s σ`, `s.epochOf.val + 1 < 2 ^ 64`
+and `buf.length = sendLen s`. If `SendAgree (Braid.send codePrims σ buf.val) res`, then
+`SendRel RA RM` relates `sendStep s buf` and
+`some (res.outputKey, res.msg, res.sendingEpoch, res.state)`. -/
 theorem sendRel_of_braid (hB : BridgeObligations) (s : States) (n : ℕ) (σ : BState)
-    (hreach : ReachParty s n) (hσ : Refines s σ) (hep : s.epochOf.val + 1 < 2 ^ 64) (t : B 64)
+    (hreach : ReachParty s n) (hσ : Refines s σ) (hep : s.epochOf.val + 1 < 2 ^ 64)
+    (buf : Slice Std.U8) (hbuf : buf.length = sendLen s)
     (res : SPQR.Chunked.SendResult codeParams Braid.Auth)
-    (h : SendAgree (Braid.send codePrims σ (t.1.take (seedLen σ))) res) :
-    SendRel RA RM (sendStep s t.1) (some (res.outputKey, res.msg, res.sendingEpoch, res.state)) := by
-  obtain ⟨out, hout⟩ := hB.send_total s n t.1 hreach hep (by rw [t.2])
-  obtain ⟨hst, hmsg, hkey⟩ := hB.send_refines_tape s n σ t.1 out hreach hep t.2 hσ hout
-  have hlen := codeSend_key_length s t.1 out hout
+    (h : SendAgree (Braid.send codePrims σ buf.val) res) :
+    SendRel RA RM (sendStep s buf) (some (res.outputKey, res.msg, res.sendingEpoch, res.state)) := by
+  obtain ⟨out, hout⟩ := hB.send_total s n buf hreach hep hbuf
+  obtain ⟨hst, hmsg, hkey⟩ := hB.send_refines_bytes s n σ buf out hreach hep hbuf hσ hout
+  have hlen := codeSend_key_length s buf out hout
+  replace hout : outOf (sendRest s buf) = some out := hout
   obtain ⟨hrel, he, hp, hk, hse⟩ := h
   rw [← hmsg] at he hp hse
   rw [← hkey] at hk
   have hRM := RM_of_absMsg out.msg res.msg he hp
-  simp only [sendStep, hout, Option.bind_eq_bind, Option.bind_some]
+  simp only [sendStep, stepOf, hout, Option.bind_eq_bind, Option.bind_some]
   rcases hko : out.key with _ | es
   · rw [hko] at hk
     simp only [keyOf, Option.bind_some, Option.pure_def, SendRel]
@@ -88,8 +91,9 @@ theorem sendRel_of_braid (hB : BridgeObligations) (s : States) (n : ℕ) (σ : B
         · exact Subtype.ext hk.2.symm
     · rw [hse]; rfl
 
-/-- One encoder step: the code's `next_chunk` emits the chunk of the secure-messaging encoder,
-and the encoders stay related. (From `next_chunk_wrap`.) -/
+/-- Let `K` be 3, 5, 30 or 36, and let `EncRel K hK hKN cd enc es`. Then
+`codePrims.nextChunk enc = (c, enc')` for some `c` and `enc'` with
+`es.nextChunk.1 = chunkOfCode c` and `EncRel K hK hKN cd enc' es.nextChunk.2`. -/
 theorem encStep {M : Type} (K : ℕ) (hK : 0 < K) (hKN : K ≤ 2 ^ 16)
     (cd : L2.Codec M K) (hKadm : K = 3 ∨ K = 5 ∨ K = 30 ∨ K = 36)
     (enc : encoding.polynomial.PolyEncoder) (es : EncoderState M L2.Sym)
@@ -103,8 +107,9 @@ theorem encStep {M : Type} (K : ℕ) (hK : 0 < K) (hKN : K ≤ 2 ^ 16)
   simp only [EncoderState.nextChunk, hecp]
   exact hc.symm
 
-/-- The send arms that do not sample: `Chunked.send` is a pure result, and `Braid.send` with any
-randomness agrees with it. -/
+/-- Let `ChunkedRel σ st`, and let `st` be neither `keysUnsampled` nor `headerReceived`. Then
+`Chunked.send` on `st` is `pure res` for some `res`, and `SendAgree (Braid.send codePrims σ r) res`
+for every `r`. -/
 theorem braid_send_pure (σ : BState) (st : SMState)
     (hrel : ChunkedRel σ st) (hs : ¬ (∃ c, st = .keysUnsampled c) ∧ ¬ ∃ c d, st = .headerReceived c d) :
     ∃ res, SPQR.Chunked.send codeParams codeAuth st = pure res ∧

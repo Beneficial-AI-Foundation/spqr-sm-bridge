@@ -124,40 +124,37 @@ end Budgeted
 
 /-! ## The allowed assumptions -/
 
-/-- The bytes of randomness that a `Braid` send step reads: 64 for key generation, 32 for
-`Encaps1`, and none otherwise. -/
-def seedLen : State encoding.polynomial.PolyEncoder encoding.polynomial.PolyDecoder → ℕ
-  | .keysUnsampled .. => 64
-  | .headerReceived .. => 32
-  | _ => 0
-
-/-- The facts about the code that `code_correctness_error_le` assumes. Each field names the issue
-of SparsePostQuantumRatchet-verify that proves it. The bridge's own facts are theorems: `codeSend_key_length`, `codeRecv_key_length`
-(`SpqrBridge.KeyLength`) and `next_chunk_wrap` (`SpqrBridge.NextChunkWrap`). -/
+/-- `BridgeObligations` is the proposition with the four fields `mlkem_sizes`, `send_total`,
+`recv_complete` and `send_refines_bytes`, with the types below. These are the premises of
+`code_correctness_error_le` about the extracted code. Constructing it requires proofs of all four
+fields. This file does not prove them. Each field names the issue of
+SparsePostQuantumRatchet-verify that tracks its proof. -/
 structure BridgeObligations : Prop where
-  /-- Imported fact, #786. -/
+  /-- `MlkemSizes` holds. Issue #786. -/
   mlkem_sizes : MlkemSizes
-  /-- Open upstream, #785 statement 1: `send` succeeds on a reachable state below the epoch
-  limit, with a 64-byte tape. -/
-  send_total : ∀ (s : States) (n : ℕ) (tape : List Std.U8), ReachParty s n →
-    s.epochOf.val + 1 < 2 ^ 64 → 64 ≤ tape.length →
-      ∃ out, codeSend s tape = some out
-  /-- Open upstream, #785 statement 2: on a reachable state, for a message that the other party
-  sent in the same run, where the machine accepts, `recv` returns `Ok` with a related state and
-  the same key. -/
+  /-- Let `ReachParty s n`, `s.epochOf.val + 1 < 2 ^ 64` and `buf.length = sendLen s`. Then
+  `codeSend s buf = some out` for some `out`. Issue #785, statement 1. -/
+  send_total : ∀ (s : States) (n : ℕ) (buf : Slice Std.U8), ReachParty s n →
+    s.epochOf.val + 1 < 2 ^ 64 → buf.length = sendLen s →
+      ∃ out, codeSend s buf = some out
+  /-- Let `ReachRecv s msg n`, `Refines s σ` and `msg.epoch.val + 1 < 2 ^ 64`. If
+  `Braid.receive codePrims σ (absMsg msg) = some (σ', k)`, then `codeRecv s msg = some out` for
+  some `out` with `Refines out.state σ'` and `out.key.map absKey = k`. Issue #785, statement 2. -/
   recv_complete : ∀ (s : States) (n : ℕ) (σ σ' : Braid.State encoding.polynomial.PolyEncoder
       encoding.polynomial.PolyDecoder) (msg : Message) (k : Option Key),
     ReachRecv s msg n → Refines s σ → msg.epoch.val + 1 < 2 ^ 64 →
       Braid.receive codePrims σ (absMsg msg) = some (σ', k) →
         ∃ out, codeRecv s msg = some out ∧ Refines out.state σ' ∧ out.key.map absKey = k
-  /-- Open upstream, #787 statement 5: on a reachable state below the epoch limit, with a
-  64-byte tape, the machine's randomness is the tape prefix that the code read. -/
-  send_refines_tape : ∀ (s : States) (n : ℕ) (σ : Braid.State encoding.polynomial.PolyEncoder
-      encoding.polynomial.PolyDecoder) (tape : List Std.U8) (out : v1.chunked.states.Send),
-    ReachParty s n → s.epochOf.val + 1 < 2 ^ 64 → tape.length = 64 →
-      Refines s σ → codeSend s tape = some out →
-        Refines out.state (Braid.send codePrims σ (tape.take (seedLen σ))).1 ∧
-          absMsg out.msg = (Braid.send codePrims σ (tape.take (seedLen σ))).2.1 ∧
-          out.key.map absKey = (Braid.send codePrims σ (tape.take (seedLen σ))).2.2
+  /-- Let `ReachParty s n`, `s.epochOf.val + 1 < 2 ^ 64`, `buf.length = sendLen s`,
+  `Refines s σ` and `codeSend s buf = some out`. Let `(σ', m, k) = Braid.send codePrims σ buf.val`.
+  Then `Refines out.state σ'`, `absMsg out.msg = m` and `out.key.map absKey = k`. Issue #787,
+  statement 5. -/
+  send_refines_bytes : ∀ (s : States) (n : ℕ) (σ : Braid.State encoding.polynomial.PolyEncoder
+      encoding.polynomial.PolyDecoder) (buf : Slice Std.U8) (out : v1.chunked.states.Send),
+    ReachParty s n → s.epochOf.val + 1 < 2 ^ 64 → buf.length = sendLen s →
+      Refines s σ → codeSend s buf = some out →
+        Refines out.state (Braid.send codePrims σ buf.val).1 ∧
+          absMsg out.msg = (Braid.send codePrims σ buf.val).2.1 ∧
+          out.key.map absKey = (Braid.send codePrims σ buf.val).2.2
 
 end SpqrBridge

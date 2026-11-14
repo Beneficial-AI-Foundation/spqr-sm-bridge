@@ -5,7 +5,7 @@ Authors: Beneficial AI Foundation
 -/
 import SpqrBridge.CodePrims
 import SpqrBridge.CodePrimsFacts
-import SpqrBridge.TapeFacts
+import SpqrBridge.SendFacts
 import SpqrBridge.Adapter
 import SpqrBridge.PolyDecoderLawful
 import SecureMessaging.SCKA.SPQR.Construction
@@ -14,12 +14,12 @@ import SecureMessaging.SCKA.SPQR.Construction
 # Secure-messaging parameters from the code's primitives
 
 `codeParams` is the `MLKEMBraid.Parameters ProbComp` record that the bridge transfers the
-secure-messaging bound to. Every field is total. Byte strings are read with `fit`, so each
-field agrees with `codePrims` wherever the code gives the right length, and is a fixed value
-elsewhere.
+secure-messaging bound to. Every field is total. Byte strings are read with `fit n`. Such a result agrees
+with `codePrims` wherever the code gives `n` bytes, and is `n` zero bytes elsewhere. The decoder
+fields use the total wrapper `L2.polyStreamDecoder`.
 
-Sampling uses `sampleTape`, the same 64-byte tape as `codeScheme`. Key generation uses the
-whole tape, and `Encaps1` its first 32 bytes, as the code does.
+Sampling uses `sampleB`, as the uniform `fill_bytes` oracle of `codeScheme` does. Key generation
+samples 64 bytes and `Encaps1` samples 32 bytes, as the code does.
 
 `codeKem` is the KEM of `codeParams`. Its correctness error is the `ε` of the code-level bound.
 -/
@@ -70,7 +70,7 @@ def codecOf {M : Type} {K : ℕ} (f : ByteForm M K) : L2.Codec M K where
   parse c := f.ofBytes (bytesOfChunks K c)
   parse_ser p := by rw [bytesOfChunks_chunkOf, f.ofBytes_toBytes]
 
-/-- `n` bytes as themselves. -/
+/-- `bytesForm K` is the byte form on `B (32 * K)` with `toBytes = id` and `ofBytes = some`. -/
 def bytesForm (K : ℕ) : ByteForm (B (32 * K)) K := ⟨id, some, fun _ => rfl⟩
 
 /-- A pair of byte strings as their concatenation. -/
@@ -109,13 +109,16 @@ theorem keyGen_valid (r : Bytes) :
   simp only [seededKeyGen]
   exact codePrims_ekMatches_generated (seedOfBytes r)
 
-/-- Key generation on a tape. -/
+/-- Let `t : B 64` and `o := codePrims.keyGen t.1`. Then `keyGenOf t` is the pair of the public
+key with header `fit 64 o.2.1` and vector `fit 1152 o.2.2`, valid by `keyGen_valid t.1`, and the
+secret key `fit 2400 o.1`. -/
 noncomputable def keyGenOf (t : B 64) : PK × B 2400 :=
   (⟨(fit 64 (codePrims.keyGen t.1).2.1, fit 1152 (codePrims.keyGen t.1).2.2), keyGen_valid t.1⟩,
     fit 2400 (codePrims.keyGen t.1).1)
 
-/-- `Encaps1` on a header and a tape: the code reads the first 32 bytes. -/
-noncomputable def encaps1Of (h : B 64) (t : B 64) : B 2080 × B 960 × B 32 :=
+/-- Let `h : B 64`, `t : B 32` and `o := codePrims.encaps1 h.1 t.1`. Then
+`encaps1Of h t = (fit 2080 o.1, fit 960 o.2.1, fit 32 o.2.2)`. -/
+noncomputable def encaps1Of (h : B 64) (t : B 32) : B 2080 × B 960 × B 32 :=
   let o := codePrims.encaps1 h.1 t.1
   (fit 2080 o.1, fit 960 o.2.1, fit 32 o.2.2)
 
@@ -127,15 +130,20 @@ noncomputable def encaps2Det (st : B 2080) (h : B 64) (v : B 1152) : B 128 :=
 noncomputable def decapsDet (sk : B 2400) (c : B 960 × B 128) : Option (B 32) :=
   some (fit 32 (codePrims.decaps sk.1 c.1.1 c.2.1))
 
-/-- The first stage, sampling a tape. -/
+/-- `encaps1Fn h` samples `t` with `sampleB 32` and returns `encaps1Of h t`. -/
 noncomputable def encaps1Fn (h : B 64) : ProbComp (B 2080 × B 960 × B 32) := do
-  let t ← sampleTape
+  let t ← sampleB 32
   pure (encaps1Of h t)
 
-/-- The code's KEM. -/
+/-- `codeKem` is the KEM with these three algorithms.
+
+* Key generation samples `t` with `sampleB 64` and returns `keyGenOf t`.
+* Let `pk.1 = (hdr, vec)`. Encapsulation samples `(st, c1, k)` with `encaps1Fn hdr`, lets
+  `c2 := encaps2Det st hdr vec`, and returns `((c1, c2), k)`.
+* Decapsulation of `c` with `sk` is `pure (decapsDet sk c)`. -/
 noncomputable def codeKem : KEMScheme ProbComp (B 32) PK (B 2400) (B 960 × B 128) where
   keygen := do
-    let t ← sampleTape
+    let t ← sampleB 64
     pure (keyGenOf t)
   encaps pk := do
     let (hdr, vec) := pk.1
@@ -160,7 +168,8 @@ noncomputable def codeInc : codeKem.IncrementalStructure where
 
 /-! ## The parameter record -/
 
-/-- `KDF_OK`, total: the code's value at every epoch, read as 32 bytes. -/
+/-- `kdfOKTotal k n = fit 32 (codePrims.kdfOk k.1 n)`, for every natural number `n`. For an
+epoch `ep : u64`, `kdfOK_agree` (`SpqrBridge.CodeContracts`) relates it to the code's HKDF call. -/
 noncomputable def kdfOKTotal (k : B 32) (n : ℕ) : B 32 := fit 32 (codePrims.kdfOk k.1 n)
 
 /-- The secure-messaging parameters of the code. -/
@@ -205,16 +214,19 @@ noncomputable def codeAuth :
   verifyHeader_correct _ _ _ := by simp only [decide_true]
   verifyCiphertext_correct _ _ _ := by simp only [decide_true]
 
-/-- The randomness leak: each sampling call returns its tape. -/
+/-- `codeIrl` is the randomness leak of `codeInc` with randomness types `B 64`, `B 32` and
+`Unit`. Its key generation leak samples `t` with `sampleB 64` and returns `(keyGenOf t, t)`. Its
+first encapsulation leak samples `t` with `sampleB 32` and returns `(encaps1Of h t, t)`. Its second
+encapsulation leak is `pure (encaps2Det st h v, ())`. -/
 noncomputable def codeIrl : codeKem.IncrementalRandLeak codeInc where
   KeygenRand := B 64
-  Encaps1Rand := B 64
+  Encaps1Rand := B 32
   Encaps2Rand := Unit
   keygenRleak := do
-    let t ← sampleTape
+    let t ← sampleB 64
     pure (keyGenOf t, t)
   encaps1Rleak h := do
-    let t ← sampleTape
+    let t ← sampleB 32
     pure (encaps1Of h t, t)
   encaps2Rleak st h v := pure (encaps2Det st h v, ())
   keygen_fst := by simp only [bind_assoc, pure_bind]; rfl

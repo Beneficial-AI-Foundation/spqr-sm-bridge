@@ -1,0 +1,58 @@
+% Shared preamble of the SpqrBridge slide decks.
+% Same style and colors as ref-impl-simulation/slides/methodology.
+% Each deck loads it with \input{../common/preamble} and builds with: latexmk -lualatex slides.tex
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usepackage{fontspec}
+\setsansfont{DejaVu Sans}
+\directlua{
+  luaotfload.add_fallback("leanfallback", {"NotoSansMath:mode=harf;", "STIX Two Math:mode=harf;"})
+}
+\setmonofont{DejaVu Sans Mono}[Scale=0.9, RawFeature={fallback=leanfallback}]
+
+\usepackage{tikz}
+\usepackage{array}
+\usetikzlibrary{arrows.meta, positioning, calc, fit, backgrounds, shapes.misc, decorations.pathreplacing}
+
+% Colors. Spec side, impl side, proof, trusted, gap.
+\definecolor{refc}{HTML}{2B6CB0}
+\definecolor{realc}{HTML}{C05621}
+\definecolor{proofc}{HTML}{2F855A}
+\definecolor{trustc}{HTML}{718096}
+\definecolor{gapc}{HTML}{C53030}
+\definecolor{ink}{HTML}{1A202C}
+\definecolor{paper}{HTML}{FFFFFF}
+
+\setbeamercolor{normal text}{fg=ink, bg=paper}
+\setbeamercolor{frametitle}{fg=ink}
+\setbeamercolor{title}{fg=ink}
+\setbeamercolor{subtitle}{fg=trustc}
+\setbeamercolor{structure}{fg=refc}
+\setbeamerfont{frametitle}{size=\Large, series=\bfseries}
+\setbeamerfont{subtitle}{size=\footnotesize}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{%
+  \hfill\textcolor{trustc}{\scriptsize\insertframenumber/\inserttotalframenumber}\hspace{1.2em}\vspace{0.8em}}
+
+\tikzset{
+  >={Stealth[length=2.4mm]},
+  box/.style={draw, rounded corners=3pt, thick, align=center, inner sep=5pt, font=\small},
+  spec/.style={box, draw=refc, fill=refc!8},
+  impl/.style={box, draw=realc, fill=realc!8},
+  proof/.style={box, draw=proofc, fill=proofc!10},
+  trust/.style={box, draw=trustc, fill=trustc!10},
+  gap/.style={box, draw=gapc, fill=gapc!6, dashed},
+  tool/.style={box, draw=ink!60, fill=ink!4},
+  doc/.style={box, draw=ink!60, fill=paper, double, double distance=1pt},
+  flow/.style={->, thick, ink!70},
+  proved/.style={<->, very thick, proofc},
+  rel/.style={-, very thick, proofc, dashed},
+  label/.style={font=\scriptsize, align=center},
+}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\specside}[1]{\textcolor{refc}{#1}}
+\newcommand{\implside}[1]{\textcolor{realc}{#1}}
+
+\author{SpqrBridge}
+\date{November 2026}

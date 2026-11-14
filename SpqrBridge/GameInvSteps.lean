@@ -16,7 +16,7 @@ grows by one send. `CodeBound` imports this file, so the invariant appears here 
 `RecordedRaw` and `CodeGameInvRaw`. They are `RecordedAs` and `CodeGameInv` by definition.
 
 The linter `constructorNameAsVariable` reaches its recursion limit on binders whose type mentions
-the support of `sampleTape`, so `codeGameInvRaw_pres` turns it off. For the same reason, the proofs rewrite
+the support of a sampler, so `codeGameInvRaw_pres` turns it off. For the same reason, the proofs rewrite
 a hypothesis `_ ∈ support (codeSendA s)` in place and never pass it to a lemma: passing it as
 an argument also reaches the recursion limit.
 -/
@@ -28,11 +28,12 @@ open OracleSpec OracleComp SCKAScheme
 
 /-! ## Code steps -/
 
-/-- A successful `sendStep` is a successful `codeSend` with the same message and next state. -/
-theorem sendStep_some {s : States} {tape : List Std.U8} {k : Option (ℕ × B 32)} {m : Message}
-    {e : ℕ} {s' : States} (h : sendStep s tape = some (k, m, e, s')) :
-    ∃ out, codeSend s tape = some out ∧ m = out.msg ∧ s' = out.state := by
-  simp only [sendStep, Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def,
+/-- Let `sendStep s buf = some (k, m, e, s')`. Then there exists `out` such that
+`codeSend s buf = some out`, `m = out.msg` and `s' = out.state`. -/
+theorem sendStep_some {s : States} {buf : Slice Std.U8} {k : Option (ℕ × B 32)} {m : Message}
+    {e : ℕ} {s' : States} (h : sendStep s buf = some (k, m, e, s')) :
+    ∃ out, codeSend s buf = some out ∧ m = out.msg ∧ s' = out.state := by
+  simp only [sendStep, stepOf, Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def,
     Option.some.injEq] at h
   obtain ⟨out, hout, k', -, hk⟩ := h
   simp only [Prod.mk.injEq] at hk
@@ -81,7 +82,7 @@ theorem sendBUpdate_nB (st : StB) : (sendBUpdate s keyOpt ρ tsnd st).nB = s.nB 
 theorem sendBUpdate_nA (st : StB) : (sendBUpdate s keyOpt ρ tsnd st).nA = s.nA := by
   rcases keyOpt with _ | ⟨_, _⟩ <;> rfl
 
-/-- A's receive update changes A's state and nothing that `CodeGameInv` reads. -/
+/-- `recvAUpdate` sets `stA` to `st`. It does not change `stB`, `msgA`, `msgB`, `nA` and `nB`. -/
 theorem recvAUpdate_fields (trcv : ℕ) (st : StA) :
     (recvAUpdate s tsnd keyOpt trcv st).stA = st ∧ (recvAUpdate s tsnd keyOpt trcv st).stB = s.stB ∧
       (recvAUpdate s tsnd keyOpt trcv st).msgA = s.msgA ∧
@@ -89,7 +90,7 @@ theorem recvAUpdate_fields (trcv : ℕ) (st : StA) :
       (recvAUpdate s tsnd keyOpt trcv st).nA = s.nA ∧ (recvAUpdate s tsnd keyOpt trcv st).nB = s.nB := by
   rcases keyOpt with _ | ⟨_, _⟩ <;> exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-/-- B's receive update changes B's state and nothing that `CodeGameInv` reads. -/
+/-- `recvBUpdate` sets `stB` to `st`. It does not change `stA`, `msgA`, `msgB`, `nA` and `nB`. -/
 theorem recvBUpdate_fields (trcv : ℕ) (st : StB) :
     (recvBUpdate s tsnd keyOpt trcv st).stB = st ∧ (recvBUpdate s tsnd keyOpt trcv st).stA = s.stA ∧
       (recvBUpdate s tsnd keyOpt trcv st).msgA = s.msgA ∧
@@ -162,16 +163,16 @@ theorem codeGameInvRaw_pres (sampleInitKey : ProbComp InitKey) :
     rcases out with _ | ⟨keyOpt, ρ, tsnd, st'⟩
     · exact hs
     · change _ ∈ support (codeSendA _) at hout
-      unfold codeSendA at hout
-      rw [mem_support_bind_iff] at hout
-      obtain ⟨t, -, ht⟩ := hout
+      rw [codeSendA_eq, mem_support_bind_iff] at hout
+      obtain ⟨t, hlen, ht⟩ := hout
+      replace hlen := sampleBuf_length _ t hlen
       rw [mem_support_pure_iff] at ht
       obtain ⟨o, hco, rfl, rfl⟩ := sendStep_some ht.symm
       obtain ⟨mA, mB, hR, hA, hB⟩ := hs
       refine ⟨mA ++ [o.msg], mB, ?_, ?_, ?_⟩
       · rw [sendAUpdate_stA, sendAUpdate_stB, sendAUpdate_nA, sendAUpdate_nB,
           Nat.add_right_comm]
-        exact CodeReach.sendA _ o hR hco
+        exact CodeReach.sendA _ o hR hlen hco
       · rw [sendAUpdate_msgA, sendAUpdate_nA]
         exact recorded_update hA _ _
       · rw [sendAUpdate_msgB, sendAUpdate_nB]
@@ -183,15 +184,15 @@ theorem codeGameInvRaw_pres (sampleInitKey : ProbComp InitKey) :
     rcases out with _ | ⟨keyOpt, ρ, tsnd, st'⟩
     · exact hs
     · change _ ∈ support (codeSendA _) at hout
-      unfold codeSendA at hout
-      rw [mem_support_bind_iff] at hout
-      obtain ⟨t, -, ht⟩ := hout
+      rw [codeSendA_eq, mem_support_bind_iff] at hout
+      obtain ⟨t, hlen, ht⟩ := hout
+      replace hlen := sampleBuf_length _ t hlen
       rw [mem_support_pure_iff] at ht
       obtain ⟨o, hco, rfl, rfl⟩ := sendStep_some ht.symm
       obtain ⟨mA, mB, hR, hA, hB⟩ := hs
       refine ⟨mA, mB ++ [o.msg], ?_, ?_, ?_⟩
       · rw [sendBUpdate_stA, sendBUpdate_stB, sendBUpdate_nA, sendBUpdate_nB, ← Nat.add_assoc]
-        exact CodeReach.sendB _ o hR hco
+        exact CodeReach.sendB _ o hR hlen hco
       · rw [sendBUpdate_msgA, sendBUpdate_nA]
         exact hA
       · rw [sendBUpdate_msgB, sendBUpdate_nB]

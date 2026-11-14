@@ -3,22 +3,23 @@ Copyright (c) 2026 Beneficial AI Foundation. All rights reserved.
 Released under MIT license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
-import SpqrBridge.Adapter
+import SpqrBridge.SendFacts
 import Spqr.Specs.Braid.Scka.EpochUniqueness.KeyFloor
 import Spqr.Specs.Braid.StateMachine.EpochDispatch
 
 /-!
 # Epoch bound for the adapter
 
-`epoch_bound`: in every configuration that a correctness game on `codeScheme` reaches, both
-state epochs are at most the number of successful sends plus one, and every recorded message
-epoch is at most the number of successful sends. Deliveries, replays and stale messages do not
+`epoch_bound_strong`: in every configuration that a correctness game on `codeScheme` reaches,
+both state epochs are at most the number of successful sends plus one, and every recorded message
+epoch is at most the number of successful sends. `epoch_bound` is the weaker form with the bound
+`n + 1` for the messages too. Deliveries, replays and stale messages do not
 count. A failed call leaves both states and both message lists unchanged, so the bound also
 holds after a failure.
 
 The proof uses two step facts. A successful `send` keeps the state epoch and stamps the
-message with it (`send_epoch`). A successful `recv` moves the state epoch to at most the
-incoming message epoch plus one (`recv_epoch_le`).
+message with it (`send_epoch`). After a successful `recv`, the state epoch is at most the
+larger of the old state epoch and the incoming message epoch plus one (`recv_epoch_le`).
 -/
 
 namespace SpqrBridge
@@ -72,8 +73,8 @@ theorem epochOf_le_keyFloor (s : States) : s.epochOf.val ≤ keyFloor s := by
 theorem keyFloor_le_epochOf_succ (s : States) : keyFloor s ≤ s.epochOf.val + 1 := by
   cases s <;> simp only [States.epochOf, keyFloor] <;> omega
 
-/-- A successful `recv` moves the state epoch to at most the larger of the old epoch and the
-incoming message epoch plus one. -/
+/-- Let `States.recv s msg = ok (.Ok r)`. Then
+`r.state.epochOf.val ≤ max s.epochOf.val (msg.epoch.val + 1)`. -/
 theorem recv_epoch_le (s : States) (msg : Message) (r : v1.chunked.states.Recv)
     (h : States.recv s msg = ok (.Ok r)) :
     r.state.epochOf.val ≤ max s.epochOf.val (msg.epoch.val + 1) := by
@@ -96,20 +97,14 @@ theorem recv_epoch_le (s : States) (msg : Message) (r : v1.chunked.states.Recv)
       rw [hme] at hlt ⊢
       omega
 
-/-- `codeSend` succeeds exactly when `States::send` returns `Ok`. -/
-theorem codeSend_some {s : States} {tape : List Std.U8} {out : v1.chunked.states.Send}
-    (h : codeSend s tape = some out) :
-    ∃ rng', States.send tapeRng tapeCrypto s tape = ok (.Ok out, rng') := by
-  unfold codeSend at h
-  generalize States.send tapeRng tapeCrypto s tape = x at h
-  cases x with
-  | ret r =>
-    obtain ⟨res, rng'⟩ := r
-    cases res <;> simp_all [Result.match.ok]
-  | vis i k => simp [Result.match.vis] at h
-  | div => simp [Result.match.div] at h
+/-- Let `codeSend s buf = some out`. Then
+`States.send (fixedRng buf) (fixedCrypto buf) s () = ok (.Ok out, rng')` for some `rng'`. -/
+theorem codeSend_some {s : States} {buf : Slice Std.U8} {out : v1.chunked.states.Send}
+    (h : codeSend s buf = some out) :
+    ∃ rng', States.send (fixedRng buf) (fixedCrypto buf) s () = ok (.Ok out, rng') :=
+  (codeSend_eq_some_iff s buf out).mp h
 
-/-- `codeRecv` succeeds exactly when `States::recv` returns `Ok`. -/
+/-- Let `codeRecv s msg = some out`. Then `States.recv s msg = ok (.Ok out)`. -/
 theorem codeRecv_some {s : States} {msg : Message} {out : v1.chunked.states.Recv}
     (h : codeRecv s msg = some out) : States.recv s msg = ok (.Ok out) := by
   unfold codeRecv at h
@@ -130,8 +125,8 @@ theorem initBState_epoch (k : InitKey) : (initBState k).epochOf.val ≤ 1 := by
   have := epochOf_le_keyFloor (initBState k)
   omega
 
-/-- The inductive form of the bound: message epochs are at most `n`, state epochs at most
-`n + 1`. -/
+/-- Let `CodeReach sA sB mA mB n`. Then `sA.epochOf.val ≤ n + 1`, `sB.epochOf.val ≤ n + 1`, and
+`m.epoch.val ≤ n` for every `m` in `mA ++ mB`. -/
 theorem epoch_bound_strong {sA sB : States} {mA mB : List Message} {n : ℕ}
     (h : CodeReach sA sB mA mB n) :
     sA.epochOf.val ≤ n + 1 ∧ sB.epochOf.val ≤ n + 1 ∧
@@ -139,7 +134,7 @@ theorem epoch_bound_strong {sA sB : States} {mA mB : List Message} {n : ℕ}
   induction h with
   | init k =>
     exact ⟨initAState_epoch k, initBState_epoch k, by simp⟩
-  | sendA tape out _ hs ih =>
+  | sendA buf out _ _ hs ih =>
     obtain ⟨hA, hB, hm⟩ := ih
     obtain ⟨_, hc⟩ := codeSend_some hs
     obtain ⟨he, hst⟩ := send_epoch _ _ _ _ _ _ hc
@@ -149,7 +144,7 @@ theorem epoch_bound_strong {sA sB : States} {mA mB : List Message} {n : ℕ}
     · have := hm m (List.mem_append_left _ hmem); omega
     · rw [he]; omega
     · have := hm m (List.mem_append_right _ hmem); omega
-  | sendB tape out _ hs ih =>
+  | sendB buf out _ _ hs ih =>
     obtain ⟨hA, hB, hm⟩ := ih
     obtain ⟨_, hc⟩ := codeSend_some hs
     obtain ⟨he, hst⟩ := send_epoch _ _ _ _ _ _ hc
@@ -170,8 +165,8 @@ theorem epoch_bound_strong {sA sB : States} {mA mB : List Message} {n : ℕ}
     have := hm m (List.mem_append_left _ hmem)
     exact ⟨hA, by omega, hm⟩
 
-/-- Epoch bound: in every reachable configuration, both state epochs and every recorded
-message epoch are at most the number of successful sends plus one. -/
+/-- Let `CodeReach sA sB mA mB n`. Then `sA.epochOf.val ≤ n + 1`, `sB.epochOf.val ≤ n + 1`, and
+`m.epoch.val ≤ n + 1` for every `m` in `mA ++ mB`. -/
 theorem epoch_bound {sA sB : States} {mA mB : List Message} {n : ℕ}
     (h : CodeReach sA sB mA mB n) :
     sA.epochOf.val ≤ n + 1 ∧ sB.epochOf.val ≤ n + 1 ∧
@@ -179,10 +174,9 @@ theorem epoch_bound {sA sB : States} {mA mB : List Message} {n : ℕ}
   obtain ⟨hA, hB, hm⟩ := epoch_bound_strong h
   exact ⟨hA, hB, fun m hmem => Nat.le_succ_of_le (hm m hmem)⟩
 
-/-- Epoch budget: with at most `q` successful sends and `q + 2 < 2 ^ 64`, every state epoch
-plus one and every message epoch fit in a `u64`. So the code's checked epoch increments do not
-overflow, and the `u64` epochs equal SM's natural-number epochs. The game supplies `n ≤ q`
-from `SendQueryBound adv q`, because each successful send is a send query. -/
+/-- Let `CodeReach sA sB mA mB n`, `n ≤ q` and `q + 2 < 2 ^ 64`. Then
+`sA.epochOf.val + 1 < 2 ^ 64`, `sB.epochOf.val + 1 < 2 ^ 64`, and `m.epoch.val + 1 < 2 ^ 64`
+for every `m` in `mA ++ mB`. -/
 theorem epoch_budget {sA sB : States} {mA mB : List Message} {n q : ℕ}
     (h : CodeReach sA sB mA mB n) (hn : n ≤ q) (hq64 : q + 2 < 2 ^ 64) :
     sA.epochOf.val + 1 < 2 ^ 64 ∧ sB.epochOf.val + 1 < 2 ^ 64 ∧
