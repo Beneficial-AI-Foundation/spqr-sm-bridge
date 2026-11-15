@@ -1,0 +1,95 @@
+name: CI
+
+# Runs on every PR (no path filter), so the check can be required for merging
+# without being skipped on Markdown-only or slides-only PRs.
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  LEAN_ABORT_ON_PANIC: 1
+
+jobs:
+  build:
+    name: Build and check proofs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h /
+
+      # The only cache for .lake. Mathlib build files are left out because
+      # `lake exe cache get` downloads them, and they are most of the size.
+      - name: Restore Lake cache
+        id: lake-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .lake
+            !.lake/packages/mathlib/.lake/build
+          key: lake-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lakefile.toml', 'lake-manifest.json') }}-${{ github.sha }}
+          restore-keys: |
+            lake-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lakefile.toml', 'lake-manifest.json') }}-
+
+      - name: Set up Lean
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: "false"
+          build: "false"
+          use-mathlib-cache: "true"
+          use-github-cache: "false"
+
+      - name: Build
+        id: build
+        run: |
+          set -o pipefail
+          lake build --no-ansi 2>&1 | tee build.log
+
+      # Every theorem in this repo is proved. Fail on any `sorry`, and on any
+      # axiom other than the three standard Lean axioms in `#print axioms`
+      # output.
+      - name: Check for sorry and extra axioms
+        run: |
+          status=0
+          if grep -E "declaration uses '?sorry" build.log; then
+            echo "::error::The build contains sorry."
+            status=1
+          fi
+          extra=$(grep -E 'depends on axioms: \[' build.log \
+            | sed -E 's/.*depends on axioms: \[(.*)\]/\1/' \
+            | tr ',' '\n' | sed 's/^ *//' \
+            | grep -vxE 'propext|Classical\.choice|Quot\.sound' || true)
+          if [ -n "$extra" ]; then
+            echo "::error::Non-standard axioms used:"
+            grep -E 'depends on axioms' build.log | grep -vE '\[(propext|Classical\.choice|Quot\.sound)(, (propext|Classical\.choice|Quot\.sound))*\]'
+            status=1
+          fi
+          exit $status
+
+      - name: Save Lake cache
+        if: >-
+          ${{
+            !cancelled()
+            && steps.build.outcome == 'success'
+            && steps.lake-cache.outputs.cache-hit != 'true'
+            && (github.ref == 'refs/heads/main'
+                || steps.lake-cache.outputs.cache-matched-key == '')
+          }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .lake
+            !.lake/packages/mathlib/.lake/build
+          key: ${{ steps.lake-cache.outputs.cache-primary-key }}
