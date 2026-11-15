@@ -7,13 +7,13 @@ import SpqrBridge.CodePrims
 import SpqrBridge.CodePrimsFacts
 import SpqrBridge.SendFacts
 import SpqrBridge.Adapter
-import SpqrBridge.PolyDecoderLawful
+import SpqrBridge.PolyDecoderSound
 import SecureMessaging.SCKA.SPQR.Construction
 
 /-!
 # Secure-messaging parameters from the code's primitives
 
-`codeParams` is the `MLKEMBraid.Parameters ProbComp` record that the bridge transfers the
+`codeParams` is the `SPQR.Parameters ProbComp` record that the bridge transfers the
 secure-messaging bound to. Every field is total. Byte strings are read with `fit n`. Such a result agrees
 with `codePrims` wherever the code gives `n` bytes, and is `n` zero bytes elsewhere. The decoder
 fields use the total wrapper `L2.polyStreamDecoder`.
@@ -21,12 +21,12 @@ fields use the total wrapper `L2.polyStreamDecoder`.
 Sampling uses `sampleB`, as the uniform `fill_bytes` oracle of `codeScheme` does. Key generation
 samples 64 bytes and `Encaps1` samples 32 bytes, as the code does.
 
-`codeKem` is the KEM of `codeParams`. Its correctness error is the `ε` of the code-level bound.
+`codeDet` is the incremental KEM with explicit coins of `codeParams`, and `codeKem` is its KEM. Its correctness error is the `ε` of the code-level bound.
 -/
 
 namespace SpqrBridge
 
-open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
+open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states BraidModel
 open ErasureCodePayload.Streaming
 
 /-! ## Codecs: payloads as chunks of 32 bytes -/
@@ -131,40 +131,41 @@ noncomputable def decapsDet (sk : B 2400) (c : B 960 × B 128) : Option (B 32) :
   some (fit 32 (codePrims.decaps sk.1 c.1.1 c.2.1))
 
 /-- `encaps1Fn h` samples `t` with `sampleB 32` and returns `encaps1Of h t`. -/
-noncomputable def encaps1Fn (h : B 64) : ProbComp (B 2080 × B 960 × B 32) := do
-  let t ← sampleB 32
-  pure (encaps1Of h t)
+noncomputable def encaps1Fn (h : B 64) : ProbComp (B 2080 × B 960 × B 32) :=
+  encaps1Of h <$> sampleB 32
 
-/-- `codeKem` is the KEM with these three algorithms.
+/-- `codeDet` is the code's incremental KEM with explicit coins.
 
-* Key generation samples `t` with `sampleB 64` and returns `keyGenOf t`.
-* Let `pk.1 = (hdr, vec)`. Encapsulation samples `(st, c1, k)` with `encaps1Fn hdr`, lets
-  `c2 := encaps2Det st hdr vec`, and returns `((c1, c2), k)`.
-* Decapsulation of `c` with `sk` is `pure (decapsDet sk c)`. -/
-noncomputable def codeKem : KEMScheme ProbComp (B 32) PK (B 2400) (B 960 × B 128) where
-  keygen := do
-    let t ← sampleB 64
-    pure (keyGenOf t)
-  encaps pk := do
-    let (hdr, vec) := pk.1
-    let (st, c1, k) ← encaps1Fn hdr
-    let c2 ← (pure (encaps2Det st hdr vec) : ProbComp (B 128))
-    pure ((c1, c2), k)
-  decaps sk c := pure (decapsDet sk c)
-
-/-- The incremental structure of the code's KEM. -/
-noncomputable def codeInc : codeKem.IncrementalStructure where
+* Key generation from coins `t : B 64` is `keyGenOf t`. Its sampler is `sampleB 64`.
+* The first stage on a header `h` with coins `t : B 32` is `encaps1Of h t`. Its sampler is
+  `sampleB 32`.
+* The second stage is `encaps2Det`, and decapsulation is `decapsDet`.
+* Public keys and ciphertexts split by `Equiv.refl`. -/
+noncomputable def codeDet : KEMScheme.IncrementalKEMDet ProbComp (B 32) PK (B 2400) (B 960 × B 128)
+    where
   PKheader := B 64
   PKvector := B 1152
   C₁ := B 960
   C₂ := B 128
   St := B 2080
+  KeygenRand := B 64
+  Encaps1Rand := B 32
   validPK h v := codePrims.ekMatches h.1 v.1
   splitPK := Equiv.refl _
   splitC := Equiv.refl _
-  encaps1 := encaps1Fn
-  encaps2 st h v := pure (encaps2Det st h v)
-  factor _ := rfl
+  keygenDet := keyGenOf
+  encaps1Det := encaps1Of
+  encaps2Det := encaps2Det
+  decapsDet := decapsDet
+  sampleKeygen := sampleB 64
+  sampleEncaps1 := sampleB 32
+
+/-- `codeKem` is the KEM of `codeDet`: it samples the coins and runs the algorithms on them. -/
+noncomputable abbrev codeKem : KEMScheme ProbComp (B 32) PK (B 2400) (B 960 × B 128) :=
+  codeDet.toKEM
+
+/-- The incremental structure of `codeKem`. -/
+noncomputable abbrev codeInc : codeKem.IncrementalStructure := codeDet.toIncremental
 
 /-! ## The parameter record -/
 
@@ -173,15 +174,12 @@ epoch `ep : u64`, `kdfOK_agree` (`SpqrBridge.CodeContracts`) relates it to the c
 noncomputable def kdfOKTotal (k : B 32) (n : ℕ) : B 32 := fit 32 (codePrims.kdfOk k.1 n)
 
 /-- The secure-messaging parameters of the code. -/
-noncomputable def codeParams : MLKEMBraid.Parameters ProbComp where
+noncomputable def codeParams : SPQR.Parameters ProbComp where
   K := B 32
   PK := PK
   SK := B 2400
   C := B 960 × B 128
-  kem := codeKem
-  inc := codeInc
-  hDet := ⟨decapsDet, fun _ _ => rfl⟩
-  hEnc2 := ⟨encaps2Det, fun _ _ _ => rfl⟩
+  det := codeDet
   EpochKey := B 32
   Mac := B 32
   Sym := L2.Sym
@@ -199,9 +197,9 @@ instance : DecidableEq codeParams.K := inferInstanceAs (DecidableEq (B 32))
 instance : DecidableEq codeParams.EpochKey := inferInstanceAs (DecidableEq (B 32))
 instance : DecidableEq codeParams.Sym := inferInstanceAs (DecidableEq L2.Sym)
 
-/-! ## The authenticator and the randomness leak -/
+/-! ## The authenticator -/
 
-/-- The code's ratcheted authenticator, from `Braid.Auth`. MACs are read as 32 bytes, and
+/-- The code's ratcheted authenticator, from `BraidModel.Auth`. MACs are read as 32 bytes, and
 verification compares with the recomputed MAC. -/
 noncomputable def codeAuth :
     RatchetedAuthenticator InitKey (B 32) Auth (B 64) (B 960 × B 128) (B 32) where
@@ -214,27 +212,8 @@ noncomputable def codeAuth :
   verifyHeader_correct _ _ _ := by simp only [decide_true]
   verifyCiphertext_correct _ _ _ := by simp only [decide_true]
 
-/-- `codeIrl` is the randomness leak of `codeInc` with randomness types `B 64`, `B 32` and
-`Unit`. Its key generation leak samples `t` with `sampleB 64` and returns `(keyGenOf t, t)`. Its
-first encapsulation leak samples `t` with `sampleB 32` and returns `(encaps1Of h t, t)`. Its second
-encapsulation leak is `pure (encaps2Det st h v, ())`. -/
-noncomputable def codeIrl : codeKem.IncrementalRandLeak codeInc where
-  KeygenRand := B 64
-  Encaps1Rand := B 32
-  Encaps2Rand := Unit
-  keygenRleak := do
-    let t ← sampleB 64
-    pure (keyGenOf t, t)
-  encaps1Rleak h := do
-    let t ← sampleB 32
-    pure (encaps1Of h t, t)
-  encaps2Rleak st h v := pure (encaps2Det st h v, ())
-  keygen_fst := by simp only [bind_assoc, pure_bind]; rfl
-  encaps1_fst _ := by simp only [bind_assoc, pure_bind]; rfl
-  encaps2_fst _ _ _ := by simp only [pure_bind]; rfl
-
 /-- The secure-messaging SPQR scheme over the code's parameters. -/
 noncomputable def smScheme (sampleInitKey : ProbComp InitKey) :=
-  SPQR.scheme codeParams codeAuth codeIrl sampleInitKey
+  SPQR.scheme codeParams codeAuth sampleInitKey
 
 end SpqrBridge

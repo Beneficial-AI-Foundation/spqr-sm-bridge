@@ -14,7 +14,7 @@
     \node[impl] (c) {\textbf{code}\\extracted \code{States}};
     \node[spec, right=1.3cm of c] (b) {\textbf{\code{Braid}}\\abstract machine};
     \node[spec, right=1.3cm of b] (k) {\textbf{\code{SPQR.Chunked}}\\SM model};
-    \node[proof, right=1.3cm of k] (q) {$\Pr[\text{fail}] \le q\varepsilon$\\if four open facts hold};
+    \node[proof, right=1.3cm of k] (q) {$\Pr[\text{fail}] \le q\varepsilon$\\if three open facts hold};
     \draw[rel] (c) -- node[above, label, text=proofc] {refines} (b);
     \draw[rel] (b) -- node[above, label, text=proofc] {related} (k);
     \draw[flow, proofc] (k) -- node[above, label, text=proofc] {SM proof} (q);
@@ -81,13 +81,13 @@
   \vspace{0.3em}
   \raggedright\footnotesize
   The bound needs the dashed arrow, not the proved one: ``some randomness'' says nothing about its
-  distribution. Issues \#785, \#786 and \#787 own the dashed arrow.
+  distribution. Issues \#785 and \#787 own the dashed arrow.
 \end{frame}
 
 \begin{frame}[t,fragile]{The result}
   \vspace{0.2em}
   \footnotesize
-  Assume the four facts about the code in \code{BridgeObligations}, which are not proved yet. The
+  Assume the three facts about the code in \code{BridgeObligations}, which are not proved yet. The
   send and receive facts cover reachable runs only. Let
   \code{adv} make at most $q$ send queries, counted over both parties, with $q + 2 < 2^{64}$.\\[0.3em]
   Then the probability that the correctness game fails on the code is at most $q\varepsilon$.
@@ -145,8 +145,8 @@ theorem code_correctness_error_le (hB : BridgeObligations)
   \footnotesize
   SM's machines are generic in a \code{StreamDecoder}. SM's own decoder decodes a set of chunks.
   The Rust decoder skips points as they arrive, so its state depends on the order. SM's proofs
-  need one law, \code{Lawful}: adding a chunk of $p$ to a decoder that is honest for $p$ keeps it
-  honest, and it then decodes nothing or $p$.
+  need one law, \code{Sound}: a decoder that receives only chunks of $p$ decodes nothing or
+  $p$.
   \vspace{0.2em}
 
   \centering
@@ -169,7 +169,7 @@ theorem code_correctness_error_le (hB : BridgeObligations)
     \item Honest state: every stored point lies on the slot polynomial of $p$. An honest chunk
       adds a point of the same polynomial, or is skipped.
     \item $K$ points with distinct $x$ fix a polynomial of degree $< K$, so a decoded value is $p$.
-    \item \code{polyStreamDecoder\_lawful}: one theorem for the four streams, $K \in \{3, 36, 30, 5\}$.
+    \item \code{polyStreamDecoder\_sound}: one theorem for the four streams, $K \in \{3, 36, 30, 5\}$.
     \item The law is safety only: a decoder that never decodes meets it too.
   \end{itemize}
 \end{frame}
@@ -275,13 +275,13 @@ theorem code_correctness_error_le (hB : BridgeObligations)
       layer/.style={box, minimum width=8.2cm, minimum height=0.5cm, inner sep=3pt, font=\scriptsize},
       why/.style={label, text=trustc, anchor=west, align=left}]
     \node[proof, layer] (thm) at (0, 0) {the theorem, checked by the Lean kernel};
-    \node[gap, layer, below=0.12cm of thm] (l1) {premises: \code{BridgeObligations}, four fields};
-    \node[trust, layer, below=0.12cm of l1] (l2) {logical axioms: HKDF, HMAC, libcrux workaround};
+    \node[gap, layer, below=0.12cm of thm] (l1) {premises: \code{BridgeObligations}, three fields};
+    \node[trust, layer, below=0.12cm of l1] (l2) {logical axioms: HKDF, HMAC};
     \node[trust, layer, below=0.12cm of l2] (l3) {model adequacy: FIPS 203 for libcrux, opaque functions};
     \node[trust, layer, below=0.12cm of l3] (l6) {ideal RNG: \code{IdealRng}, a new generator state per send};
     \node[trust, layer, below=0.12cm of l6] (l4) {the extraction: hand rename for the Aeneas bump};
     \node[tool, layer, below=0.12cm of l4] (l5) {tools: Charon, Aeneas and its library, VCVio, Lean};
-    \foreach \n/\t in {l1/{\#785, \#786, \#787}, l2/{\code{\#print axioms}}, l3/{review, testing}, l6/{deployment}, l4/{re-extract}, l5/tools} {
+    \foreach \n/\t in {l1/{\#785, \#787}, l2/{\code{\#print axioms}}, l3/{review, testing}, l6/{deployment}, l4/{re-extract}, l5/tools} {
       \node[why] at ([xshift=0.25cm]\n.east) {\t};
     }
   \end{tikzpicture}
@@ -307,13 +307,13 @@ theorem code_correctness_error_le (hB : BridgeObligations)
     code refines \code{Braid} & spqr-verify & proved, one direction \\
     generic stream decoders & SM & proved, merged \\
     \code{Braid} related to \code{SPQR.Chunked} & this repository & proved, every arm \\
-    Rust decoder is lawful & this repository & proved \\
+    Rust decoder is sound & this repository & proved \\
     transfer of the bound & this repository & proved, for $q + 2 < 2^{64}$ \\
     extracted \code{send} with a generator & this repository & proved, under \code{IdealRng} \\
-    premise \code{mlkem\_sizes} & spqr-verify, \#786 & open \\
+    premise \code{mlkem\_sizes} & spqr-verify, \#816 & proved, removed \\
     premises \code{send\_total}, \code{recv\_complete} & spqr-verify, \#785 & open \\
     premise \code{send\_refines\_bytes} & spqr-verify, \#787 & open \\
-    a number for $\varepsilon$ & \#788, \#799, a model link & open \\
+    a number for $\varepsilon$ & \#799, a model link & open \\
   \end{tabular}\\[0.4em]
   {\tiny spqr-verify: SparsePostQuantumRatchet-verify. SM: secure-messaging.}
   \vspace{0.3em}
@@ -324,8 +324,8 @@ theorem code_correctness_error_le (hB : BridgeObligations)
       {\textbf{Next}
        \begin{itemize}
          \item Build the exact \code{BridgeObligations} record from upstream theorems (\#785,
-           \#786, \#787). Closing an issue is not enough if its statement differs.
-         \item Bound $\varepsilon$: the \#788 workaround, the \code{sampleNTT} cap (\#799), and a
+           \#787). Closing an issue is not enough if its statement differs.
+         \item Bound $\varepsilon$: the \code{sampleNTT} cap (\#799), and a
            proof that the two FIPS 203 models agree (README).
        \end{itemize}};
   \end{tikzpicture}

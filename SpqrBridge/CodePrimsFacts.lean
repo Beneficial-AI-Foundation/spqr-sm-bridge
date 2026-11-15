@@ -17,7 +17,7 @@ Lengths of the seeded key generation and `Encaps1`, and the code's `ek` check on
 
 namespace SpqrBridge
 
-open Aeneas Aeneas.Std Result spqr Braid
+open Aeneas Aeneas.Std Result spqr BraidModel
 
 /-- `fit` on a list of the right length, as a subtype equation. -/
 theorem fit_eq {n : ℕ} {l : List Std.U8} (h : l.length = n) : fit n l = ⟨l, h⟩ :=

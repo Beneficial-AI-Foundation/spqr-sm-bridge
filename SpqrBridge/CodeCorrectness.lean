@@ -13,7 +13,7 @@ with `S₁` the code's scheme and `S₂` secure-messaging's SPQR scheme over `co
 
 * `S₂` meets the premises of the potential argument with the invariant and potential of
   `SPQR.correctness_error_le`, as in `spqr_correctness_error_le_of_transfer`. Its decoders are
-  lawful by `L2.polyStreamDecoder_lawful`.
+  sound by `L2.polyStreamDecoder_sound`.
 * The code-side invariant is `CodeGameInv`, with budget `2^64 - 2`. Below it, the invariant gives
   the reachability and epoch headroom that `send_chunked` and `receive_chunked` need, and that
   each delivered message was sent in the same run.
@@ -22,7 +22,7 @@ with `S₁` the code's scheme and `S₂` secure-messaging's SPQR scheme over `co
 
 namespace SpqrBridge
 
-open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
+open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states BraidModel
 open OracleSpec OracleComp ENNReal
 open OracleComp.ProgramLogic OracleComp.ProgramLogic.Relational
 open SCKAScheme
@@ -30,7 +30,7 @@ open SCKAScheme
 /-- The invariant of `SPQR.correctness_error_le` over `codeParams`. -/
 abbrev smInv (ik : InitKey) (s : GameState SMState SMState (B 32) (SPQR.Chunked.Message L2.Sym)) :
     Prop :=
-  MLKEMBraid.CorrectnessInv codeAuth ik (SPQR.GameState.toMLKEMBraid s) ∧ SPQR.Ct1AckInv s
+  Braid.CorrectnessInv codeAuth ik (SPQR.GameState.toBraid s) ∧ SPQR.Ct1AckInv s
 
 /-- Let `CodeGameInv s`. Then `ReachParty s.stA (s.nA + s.nB)` and
 `ReachParty s.stB (s.nA + s.nB)`. -/
@@ -90,17 +90,17 @@ theorem code_correctness_error_le (hB : BridgeObligations) (sampleInitKey : Prob
     (hq : SendQueryBound adv q) (hq64 : q + 2 < 2 ^ 64) :
     1 - Pr{let x ← correctnessExp (codeScheme sampleInitKey) adv}[x = true] ≤
       (q : ℝ≥0∞) * codeKem.correctnessError ProbCompRuntime.probComp := by
-  have hHdr := L2.polyStreamDecoder_lawful 3 (by decide) (by decide) hdrCodec
-  have hEk := L2.polyStreamDecoder_lawful 36 (by decide) (by decide) ekCodec
-  have hCt1 := L2.polyStreamDecoder_lawful 30 (by decide) (by decide) ct1Codec
-  have hCt2 := L2.polyStreamDecoder_lawful 5 (by decide) (by decide) ct2Codec
+  have hHdr := L2.polyStreamDecoder_sound 3 (by decide) (by decide) hdrCodec
+  have hEk := L2.polyStreamDecoder_sound 36 (by decide) (by decide) ekCodec
+  have hCt1 := L2.polyStreamDecoder_sound 30 (by decide) (by decide) ct1Codec
+  have hCt2 := L2.polyStreamDecoder_sound 5 (by decide) (by decide) ct2Codec
   refine correctness_error_le_of_budgeted_transfer (codeScheme sampleInitKey)
     (smScheme sampleInitKey) smInv
-    (fun s => MLKEMBraid.failurePotential (SPQR.GameState.toMLKEMBraid s)) _
-    (spqr_potential_ge_one codeParams) (spqr_potential_init codeParams codeAuth codeIrl sampleInitKey)
-    (SPQR.correctnessImpl_preserves_correctnessInv (P := codeParams) codeAuth codeIrl
+    (fun s => Braid.failurePotential (SPQR.GameState.toBraid s)) _
+    (spqr_potential_ge_one codeParams) (spqr_potential_init codeParams codeAuth sampleInitKey)
+    (SPQR.correctnessImpl_preserves_correctnessInv (P := codeParams) codeAuth
       sampleInitKey hHdr hEk hCt1 hCt2)
-    (fun ik t s hs => SPQR.wp_failurePotential_query_le (P := codeParams) codeAuth codeIrl
+    (fun ik t s hs => SPQR.wp_failurePotential_query_le (P := codeParams) codeAuth
       sampleInitKey hHdr hEk hCt1 hCt2 ik t s hs.1 hs.2)
     CodeGameInv RA RA RM (2 ^ 64 - 2) (codeBudgetedObligations hB sampleInitKey) adv q hq
     (by omega)

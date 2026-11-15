@@ -10,7 +10,7 @@ import SpqrBridge.NextChunkWrap
 # The send arms of `Braid` → `Chunked`
 
 `sendRel_of_braid` reduces the send obligation `SendRel RA RM` for one buffer to a step of the
-abstract machine: `Braid.send` on the bytes that `fill_bytes` returned agrees with the result of
+abstract machine: `BraidModel.send` on the bytes that `fill_bytes` returned agrees with the result of
 `Chunked.send` (`SendAgree`). The code side follows from the `BridgeObligations` fields
 `send_total` and `send_refines_bytes`, and from the theorem `codeSend_key_length`. The encoder
 steps use the theorem `next_chunk_wrap`.
@@ -18,11 +18,11 @@ steps use the theorem `next_chunk_wrap`.
 
 namespace SpqrBridge
 
-open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
+open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states BraidModel
 open ErasureCodePayload.Streaming
 
 /-- `Braid` payloads and secure-messaging payloads correspond by constructor. -/
-def BPayloadRel : Braid.Payload encoding.Chunk → SPQR.Chunked.Payload L2.Sym → Prop
+def BPayloadRel : BraidModel.Payload encoding.Chunk → SPQR.Chunked.Payload L2.Sym → Prop
   | .none, .none => True
   | .hdr c, .hdr x => x = chunkOfCode c
   | .ek c, .ek x => x = chunkOfCode c
@@ -43,23 +43,23 @@ theorem RM_of_absMsg (m : Message) (m' : SPQR.Chunked.Message L2.Sym)
   rcases p with _ | _ | _ | _ | (_ | _) | _ | _ <;> rcases p' with _ | _ | _ | _ | _ | _ | _ <;>
     simp only [absMsg, BPayloadRel] at hp <;> simp only [PayloadRel, hp]
 
-/-- `Braid.send` agrees with a result of `Chunked.send`: related states, corresponding messages,
+/-- `BraidModel.send` agrees with a result of `Chunked.send`: related states, corresponding messages,
 the same key, and the report `epoch - 1`. -/
 def SendAgree (b : BState × Msg encoding.Chunk × Option Key)
-    (res : SPQR.Chunked.SendResult codeParams Braid.Auth) : Prop :=
+    (res : SPQR.Chunked.SendResult codeParams BraidModel.Auth) : Prop :=
   ChunkedRel b.1 res.state ∧ b.2.1.epoch = res.msg.epoch ∧
     BPayloadRel b.2.1.payload res.msg.payload ∧
     b.2.2 = res.outputKey.map (fun k => (k.1, k.2.1)) ∧ res.sendingEpoch = b.2.1.epoch - 1
 
 /-- Assume `BridgeObligations`. Let `ReachParty s n`, `Refines s σ`, `s.epochOf.val + 1 < 2 ^ 64`
-and `buf.length = sendLen s`. If `SendAgree (Braid.send codePrims σ buf.val) res`, then
+and `buf.length = sendLen s`. If `SendAgree (BraidModel.send codePrims σ buf.val) res`, then
 `SendRel RA RM` relates `sendStep s buf` and
 `some (res.outputKey, res.msg, res.sendingEpoch, res.state)`. -/
 theorem sendRel_of_braid (hB : BridgeObligations) (s : States) (n : ℕ) (σ : BState)
     (hreach : ReachParty s n) (hσ : Refines s σ) (hep : s.epochOf.val + 1 < 2 ^ 64)
     (buf : Slice Std.U8) (hbuf : buf.length = sendLen s)
-    (res : SPQR.Chunked.SendResult codeParams Braid.Auth)
-    (h : SendAgree (Braid.send codePrims σ buf.val) res) :
+    (res : SPQR.Chunked.SendResult codeParams BraidModel.Auth)
+    (h : SendAgree (BraidModel.send codePrims σ buf.val) res) :
     SendRel RA RM (sendStep s buf) (some (res.outputKey, res.msg, res.sendingEpoch, res.state)) := by
   obtain ⟨out, hout⟩ := hB.send_total s n buf hreach hep hbuf
   obtain ⟨hst, hmsg, hkey⟩ := hB.send_refines_bytes s n σ buf out hreach hep hbuf hσ hout
@@ -108,12 +108,12 @@ theorem encStep {M : Type} (K : ℕ) (hK : 0 < K) (hKN : K ≤ 2 ^ 16)
   exact hc.symm
 
 /-- Let `ChunkedRel σ st`, and let `st` be neither `keysUnsampled` nor `headerReceived`. Then
-`Chunked.send` on `st` is `pure res` for some `res`, and `SendAgree (Braid.send codePrims σ r) res`
+`Chunked.send` on `st` is `pure res` for some `res`, and `SendAgree (BraidModel.send codePrims σ r) res`
 for every `r`. -/
 theorem braid_send_pure (σ : BState) (st : SMState)
     (hrel : ChunkedRel σ st) (hs : ¬ (∃ c, st = .keysUnsampled c) ∧ ¬ ∃ c d, st = .headerReceived c d) :
     ∃ res, SPQR.Chunked.send codeParams codeAuth st = pure res ∧
-      ∀ r, SendAgree (Braid.send codePrims σ r) res := by
+      ∀ r, SendAgree (BraidModel.send codePrims σ r) res := by
   obtain ⟨hmk, hst⟩ := hrel
   rcases st with ⟨ep, a⟩ | ⟨⟨ep, a, pk, sk⟩, es⟩ | ⟨⟨ep, a, sk⟩, es, dec⟩ |
       ⟨⟨ep, a, sk, c1⟩, es⟩ | ⟨⟨ep, a, sk, c1⟩, dec⟩ | ⟨⟨ep, a⟩, dec⟩ | ⟨⟨ep, a, hdr⟩, dec⟩ |
@@ -125,21 +125,21 @@ theorem braid_send_pure (σ : BState) (st : SMState)
     obtain ⟨rfl, rfl, rfl, rfl, rfl, henc⟩ := hst
     obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 3 _ _ hdrCodec (by decide) enc es henc
     refine ⟨_, rfl, fun r => ?_⟩
-    simp only [Braid.send, hnc]
+    simp only [BraidModel.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, rfl, hrel'⟩, rfl, hc, rfl, rfl⟩
   · rcases σ with _ | _ | ⟨e, a', dk, d, enc⟩ | _ | _ | _ | _ | _ | _ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, hwf, henc⟩ := hst
     obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 36 _ _ ekCodec (by decide) enc es henc
     refine ⟨_, rfl, fun r => ?_⟩
-    simp only [Braid.send, hnc]
+    simp only [BraidModel.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, hwf, hrel'⟩, rfl, hc, rfl, rfl⟩
   · rcases σ with _ | _ | _ | ⟨e, a', dk, ct1, enc⟩ | _ | _ | _ | _ | _ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, henc⟩ := hst
     obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 36 _ _ ekCodec (by decide) enc es henc
     refine ⟨_, rfl, fun r => ?_⟩
-    simp only [Braid.send, hnc]
+    simp only [BraidModel.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, hrel'⟩, rfl, hc, rfl, rfl⟩
   · rcases σ with _ | _ | _ | _ | ⟨e, a', dk, ct1, d⟩ | _ | _ | _ | _ | _ | _ <;>
       simp only [SameState] at hst
@@ -155,14 +155,14 @@ theorem braid_send_pure (σ : BState) (st : SMState)
     obtain ⟨rfl, rfl, rfl, rfl, rfl, henc, rfl, hwf⟩ := hst
     obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 30 _ _ ct1Codec (by decide) enc ecs henc
     refine ⟨_, rfl, fun r => ?_⟩
-    simp only [Braid.send, hnc]
+    simp only [BraidModel.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, rfl, hrel', rfl, hwf⟩, rfl, hc, rfl, rfl⟩
   · rcases σ with _ | _ | _ | _ | _ | _ | _ | _ | ⟨e, a', es, ct1, hdr', ek, enc⟩ | _ | _ <;>
       simp only [SameState] at hst
     obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, henc⟩ := hst
     obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 30 _ _ ct1Codec (by decide) enc ecs henc
     refine ⟨_, rfl, fun r => ?_⟩
-    simp only [Braid.send, hnc]
+    simp only [BraidModel.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, rfl, rfl, rfl, rfl, hrel'⟩, rfl, hc, rfl, rfl⟩
   · rcases σ with _ | _ | _ | _ | _ | _ | _ | _ | _ | ⟨e, a', hdr', es, ct1, d⟩ | _ <;>
       simp only [SameState] at hst
@@ -173,7 +173,7 @@ theorem braid_send_pure (σ : BState) (st : SMState)
     obtain ⟨rfl, rfl, henc⟩ := hst
     obtain ⟨c, enc', hnc, hc, hrel'⟩ := encStep 5 _ _ ct2Codec (by decide) enc es henc
     refine ⟨_, rfl, fun r => ?_⟩
-    simp only [Braid.send, hnc]
+    simp only [BraidModel.send, hnc]
     exact ⟨⟨hmk, rfl, rfl, hrel'⟩, rfl, hc, rfl, rfl⟩
 
 end SpqrBridge

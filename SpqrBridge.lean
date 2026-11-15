@@ -1,4 +1,4 @@
-import SpqrBridge.PolyDecoderLawful
+import SpqrBridge.PolyDecoderSound
 import SpqrBridge.PolyEncoderChunk
 import SpqrBridge.Adapter
 import SpqrBridge.EpochBound

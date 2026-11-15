@@ -10,7 +10,7 @@ import SpqrBridge.KeyLength
 # The receive arms of `Braid` → `Chunked`
 
 `recvRel_of_braid` reduces the one-sided receive obligation `RecvRel RA` to a step of the
-abstract machine: when `Chunked.recv` accepts, `Braid.receive` accepts with a related state and
+abstract machine: when `Chunked.recv` accepts, `BraidModel.receive` accepts with a related state and
 the same key. The code side then follows from the `BridgeObligations` field `recv_complete` and
 the theorem `codeRecv_key_length`.
 
@@ -19,11 +19,11 @@ Each `recv_*` theorem proves that machine step for one arm of `Chunked.recv`.
 
 namespace SpqrBridge
 
-open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states Braid
+open Aeneas Aeneas.Std Result spqr spqr.v1.chunked.states BraidModel
 open ErasureCodePayload.Streaming
 
 /-- Let `s` be reachable and refine `σ`, let `msg` be a message that the other party sent in the
-same run, with epoch headroom, and let the messages be related. Assume that whenever `Chunked.recv` accepts, `Braid.receive` accepts with a related
+same run, with epoch headroom, and let the messages be related. Assume that whenever `Chunked.recv` accepts, `BraidModel.receive` accepts with a related
 state, the same key and the report `msg'.epoch - 1`. Then the code's receive and
 secure-messaging's receive are related by `RecvRel RA`. -/
 theorem recvRel_of_braid (hB : BridgeObligations) (s : States) (n : ℕ) (σ : BState)
@@ -31,7 +31,7 @@ theorem recvRel_of_braid (hB : BridgeObligations) (s : States) (n : ℕ) (σ : B
     (hreach : ReachRecv s msg n) (hσ : Refines s σ) (hep : msg.epoch.val + 1 < 2 ^ 64)
     (hRM : RM msg msg')
     (h : ∀ r, SPQR.Chunked.recv codeParams codeAuth st msg' = .ok r →
-      ∃ σ', Braid.receive codePrims σ (absMsg msg) =
+      ∃ σ', BraidModel.receive codePrims σ (absMsg msg) =
           some (σ', r.outputKey.map fun k => (k.1, k.2.1)) ∧
         ChunkedRel σ' r.state ∧ r.receivingEpoch = msg'.epoch - 1) :
     RecvRel RA (recvStep s msg) (SPQR.recvSCKA codeParams codeAuth st msg') := by
@@ -68,32 +68,32 @@ theorem recvRel_of_braid (hB : BridgeObligations) (s : States) (n : ℕ) (σ : B
 /-- `EkSender.recvCt2` over the code's parameters: decapsulate, derive the epoch key, update the
 authenticator and compare the tag with the recomputed MAC. -/
 theorem recvCt2_code (ep : ℕ) (a : Auth) (sk : B 2400) (c1 : B 960) (c2 : B 128) (tag : B 32) :
-    SPQR.EkSender.recvCt2 codeParams.inc codeAuth codeParams.kdfOK codeParams.hDet
-      (⟨ep, a, sk, c1⟩ : SPQR.EkSender.EkSentCt1Received codeParams.inc Auth) c2 tag =
+    SPQR.EkSender.recvCt2 codeParams codeAuth
+      (⟨ep, a, sk, c1⟩ : SPQR.EkSender.EkSentCt1Received codeParams Auth) c2 tag =
     if tag = fit 32 (Auth.macCt codePrims (Auth.update codePrims a ep
         (kdfOKTotal (fit 32 (codePrims.decaps sk.1 c1.1 c2.1)) ep).1) ep (c1.1 ++ c2.1)) then
       some (⟨ep + 1, Auth.update codePrims a ep
         (kdfOKTotal (fit 32 (codePrims.decaps sk.1 c1.1 c2.1)) ep).1⟩,
         (ep, kdfOKTotal (fit 32 (codePrims.decaps sk.1 c1.1 c2.1)) ep))
     else none := by
-  have hd : codeParams.hDet.decapsDet sk (codeParams.inc.splitC.symm (c1, c2)) =
+  have hd : codeParams.decaps sk c1 c2 =
       some (fit 32 (codePrims.decaps sk.1 c1.1 c2.1)) := rfl
   simp only [SPQR.EkSender.recvCt2, hd]
   exact if_congr (by simp only [codeAuth, decide_eq_true_eq]; rfl) rfl rfl
 
 /-- The `ct2` arm in `ekSentCt1Received` (transitions (4)–(5) of §2.5): when `Chunked.recv`
-accepts a `ct2` chunk at the state's epoch, `Braid.receive` accepts with a related state, the same
+accepts a `ct2` chunk at the state's epoch, `BraidModel.receive` accepts with a related state, the same
 key and the report `epoch - 1`. This covers the decoder that completes, with its key output, its
 epoch advance and its MAC check, and the decoder that does not. -/
-theorem recv_ekSentCt1Received_ct2 (hsz : MlkemSizes) (σ : BState) (ep : ℕ) (a : Auth)
+theorem recv_ekSentCt1Received_ct2 (σ : BState) (ep : ℕ) (a : Auth)
     (sk : B 2400) (c1 : B 960) (dec : encoding.polynomial.PolyDecoder)
     (msg : Message) (msg' : SPQR.Chunked.Message L2.Sym) (c : encoding.Chunk)
     (hrel : ChunkedRel σ (.ekSentCt1Received ⟨ep, a, sk, c1⟩ dec)) (hRM : RM msg msg')
     (hpay : msg.payload = .Ct2 c) (hep : msg'.epoch = ep) (h64 : ep < 2 ^ 64)
-    (r : SPQR.Chunked.RecvResult codeParams Braid.Auth)
+    (r : SPQR.Chunked.RecvResult codeParams BraidModel.Auth)
     (hr : SPQR.Chunked.recv codeParams codeAuth (.ekSentCt1Received ⟨ep, a, sk, c1⟩ dec) msg' =
       .ok r) :
-    ∃ σ', Braid.receive codePrims σ (absMsg msg) =
+    ∃ σ', BraidModel.receive codePrims σ (absMsg msg) =
         some (σ', r.outputKey.map fun k => (k.1, k.2.1)) ∧
       ChunkedRel σ' r.state ∧ r.receivingEpoch = msg'.epoch - 1 := by
   obtain ⟨hmk, hrel⟩ := hrel
@@ -110,8 +110,8 @@ theorem recv_ekSentCt1Received_ct2 (hsz : MlkemSizes) (σ : BState) (ep : ℕ) (
   obtain ⟨d', had, hca, hsa, hwf', res, hres, hcm, hsd, hlen⟩ :=
     decStep 5 (by decide) ct2Codec d hwf c
   simp only [SPQR.Chunked.recv, SPQR.Chunked.PartyState.epoch, lt_irrefl, ite_false] at hr
-  simp only [Braid.receive, Braid.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
-    Braid.receiveEq]
+  simp only [BraidModel.receive, BraidModel.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
+    BraidModel.receiveEq]
   rw [show codeParams.decCt2.addChunk _ (chunkOfCode c) = d' from hsa,
     show codeParams.decCt2.decodedPayload d' = _ from hsd] at hr
   rw [hca, hcm]
@@ -133,7 +133,7 @@ theorem recv_ekSentCt1Received_ct2 (hsz : MlkemSizes) (σ : BState) (ep : ℕ) (
       (codePrims.kdfOk (codePrims.decaps sk.1 c1.1 (v.val.take 128)) ep')) h64 (c1.1 ++ v.val.take 128)
       (auth_update_macKey_length _ h64 _) (by simp only [List.length_append, c1.2, ht]; omega)
     simp only [fit_of_length ht, hk, fit_eq_fit_iff hd hmac] at hr
-    simp only [Option.map_some, codePrims_ct2Size hsz]
+    simp only [Option.map_some, codePrims_ct2Size]
     by_cases hm : v.val.drop 128 = Auth.macCt codePrims (Auth.update codePrims a' ep'
       (codePrims.kdfOk (codePrims.decaps sk.1 c1.1 (v.val.take 128)) ep')) ep' (c1.1 ++ v.val.take 128)
     · simp only [hm, ↓reduceIte, Except.ok.injEq] at hr ⊢
@@ -152,14 +152,14 @@ theorem recv_ekSentCt1Received_ct2 (hsz : MlkemSizes) (σ : BState) (ep : ℕ) (
 
 /-- The `ct1` arm in `keysSampled` (transition (2)): the first `ct1` chunk starts the `ct1`
 decoder and the `ek` encoder. -/
-theorem recv_keysSampled_ct1 (hsz : MlkemSizes) (σ : BState) (ep : ℕ) (a : Auth) (pk : PK)
+theorem recv_keysSampled_ct1 (σ : BState) (ep : ℕ) (a : Auth) (pk : PK)
     (sk : B 2400) (es : EncoderState (B 64 × B 32) L2.Sym)
     (msg : Message) (msg' : SPQR.Chunked.Message L2.Sym) (c : encoding.Chunk)
     (hrel : ChunkedRel σ (.keysSampled ⟨ep, a, pk, sk⟩ es)) (hRM : RM msg msg')
     (hpay : msg.payload = .Ct1 c) (hep : msg'.epoch = ep)
-    (r : SPQR.Chunked.RecvResult codeParams Braid.Auth)
+    (r : SPQR.Chunked.RecvResult codeParams BraidModel.Auth)
     (hr : SPQR.Chunked.recv codeParams codeAuth (.keysSampled ⟨ep, a, pk, sk⟩ es) msg' = .ok r) :
-    ∃ σ', Braid.receive codePrims σ (absMsg msg) =
+    ∃ σ', BraidModel.receive codePrims σ (absMsg msg) =
         some (σ', r.outputKey.map fun k => (k.1, k.2.1)) ∧
       ChunkedRel σ' r.state ∧ r.receivingEpoch = msg'.epoch - 1 := by
   obtain ⟨hmk, hrel⟩ := hrel
@@ -178,9 +178,9 @@ theorem recv_keysSampled_ct1 (hsz : MlkemSizes) (σ : BState) (ep : ℕ) (a : Au
   simp only [SPQR.Chunked.recv, SPQR.Chunked.PartyState.epoch, lt_irrefl, ite_false,
     Except.ok.injEq] at hr
   subst hr
-  simp only [Braid.receive, Braid.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
-    Braid.receiveEq]
-  rw [codePrims_ct1Size hsz, show 960 = 32 * 30 from rfl, codePrims_decoderNew 30 (by decide) ct1Codec, hca]
+  simp only [BraidModel.receive, BraidModel.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
+    BraidModel.receiveEq]
+  rw [codePrims_ct1Size, show 960 = 32 * 30 from rfl, codePrims_decoderNew 30 (by decide) ct1Codec, hca]
   have henc := codePrims_encode (bytesForm 36) (by decide) pk.1.2
   exact ⟨_, rfl, ⟨hmk, rfl, rfl, rfl, hsa.symm, hwf', rfl, henc.1, henc.2⟩, trivial⟩
 
@@ -191,9 +191,9 @@ theorem recv_headerSent_ct1 (σ : BState) (ep : ℕ) (a : Auth) (sk : B 2400)
     (msg : Message) (msg' : SPQR.Chunked.Message L2.Sym) (c : encoding.Chunk)
     (hrel : ChunkedRel σ (.headerSent ⟨ep, a, sk⟩ es dec)) (hRM : RM msg msg')
     (hpay : msg.payload = .Ct1 c) (hep : msg'.epoch = ep)
-    (r : SPQR.Chunked.RecvResult codeParams Braid.Auth)
+    (r : SPQR.Chunked.RecvResult codeParams BraidModel.Auth)
     (hr : SPQR.Chunked.recv codeParams codeAuth (.headerSent ⟨ep, a, sk⟩ es dec) msg' = .ok r) :
-    ∃ σ', Braid.receive codePrims σ (absMsg msg) =
+    ∃ σ', BraidModel.receive codePrims σ (absMsg msg) =
         some (σ', r.outputKey.map fun k => (k.1, k.2.1)) ∧
       ChunkedRel σ' r.state ∧ r.receivingEpoch = msg'.epoch - 1 := by
   obtain ⟨hmk, hrel⟩ := hrel
@@ -210,8 +210,8 @@ theorem recv_headerSent_ct1 (σ : BState) (ep : ℕ) (a : Auth) (sk : B 2400)
   obtain ⟨d', had, hca, hsa, hwf', res, hres, hcm, hsd, hlen⟩ :=
     decStep 30 (by decide) ct1Codec d hwf c
   simp only [SPQR.Chunked.recv, SPQR.Chunked.PartyState.epoch, lt_irrefl, ite_false] at hr
-  simp only [Braid.receive, Braid.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
-    Braid.receiveEq]
+  simp only [BraidModel.receive, BraidModel.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
+    BraidModel.receiveEq]
   rw [show codeParams.decCt1.addChunk _ (chunkOfCode c) = d' from hsa,
     show codeParams.decCt1.decodedPayload d' = _ from hsd] at hr
   rw [hca, hcm]
@@ -226,14 +226,14 @@ theorem recv_headerSent_ct1 (σ : BState) (ep : ℕ) (a : Auth) (sk : B 2400)
 
 /-- The `ct2` arm in `ct1Received` (transition (4)): the first `ct2` chunk starts the `ct2`
 decoder. -/
-theorem recv_ct1Received_ct2 (hsz : MlkemSizes) (σ : BState) (ep : ℕ) (a : Auth) (sk : B 2400)
+theorem recv_ct1Received_ct2 (σ : BState) (ep : ℕ) (a : Auth) (sk : B 2400)
     (c1 : B 960) (es : EncoderState (B (32 * 36)) L2.Sym)
     (msg : Message) (msg' : SPQR.Chunked.Message L2.Sym) (c : encoding.Chunk)
     (hrel : ChunkedRel σ (.ct1Received ⟨ep, a, sk, c1⟩ es)) (hRM : RM msg msg')
     (hpay : msg.payload = .Ct2 c) (hep : msg'.epoch = ep)
-    (r : SPQR.Chunked.RecvResult codeParams Braid.Auth)
+    (r : SPQR.Chunked.RecvResult codeParams BraidModel.Auth)
     (hr : SPQR.Chunked.recv codeParams codeAuth (.ct1Received ⟨ep, a, sk, c1⟩ es) msg' = .ok r) :
-    ∃ σ', Braid.receive codePrims σ (absMsg msg) =
+    ∃ σ', BraidModel.receive codePrims σ (absMsg msg) =
         some (σ', r.outputKey.map fun k => (k.1, k.2.1)) ∧
       ChunkedRel σ' r.state ∧ r.receivingEpoch = msg'.epoch - 1 := by
   obtain ⟨hmk, hrel⟩ := hrel
@@ -252,15 +252,15 @@ theorem recv_ct1Received_ct2 (hsz : MlkemSizes) (σ : BState) (ep : ℕ) (a : Au
   simp only [SPQR.Chunked.recv, SPQR.Chunked.PartyState.epoch, lt_irrefl, ite_false,
     Except.ok.injEq] at hr
   subst hr
-  simp only [Braid.receive, Braid.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
-    Braid.receiveEq]
-  rw [codePrims_ct2Size hsz, codePrims_macSize, show 128 + 32 = 32 * 5 from rfl,
+  simp only [BraidModel.receive, BraidModel.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
+    BraidModel.receiveEq]
+  rw [codePrims_ct2Size, codePrims_macSize, show 128 + 32 = 32 * 5 from rfl,
     codePrims_decoderNew 5 (by decide) ct2Codec, hca]
   exact ⟨_, rfl, ⟨hmk, rfl, rfl, rfl, rfl, hsa.symm, hwf'⟩, trivial⟩
 
 /-- `CtSender.recvHeader` over the code's parameters: compare the tag with the recomputed MAC. -/
 theorem recvHeader_code (ep : ℕ) (a : Auth) (hdr : B 64) (tag : B 32) :
-    SPQR.CtSender.recvHeader codeParams.inc codeAuth
+    SPQR.CtSender.recvHeader codeParams codeAuth
       (⟨ep, a⟩ : SPQR.CtSender.NoHeaderReceived Auth) hdr tag =
     if tag = fit 32 (Auth.macHdr codePrims a ep hdr.1) then some ⟨ep, a, hdr⟩ else none := by
   simp only [SPQR.CtSender.recvHeader]
@@ -268,14 +268,14 @@ theorem recvHeader_code (ep : ℕ) (a : Auth) (hdr : B 64) (tag : B 32) :
 
 /-- The `hdr` arm in `noHeaderReceived` (transition (6)): a header chunk that completes or does
 not complete the decoder, with the header MAC check. -/
-theorem recv_noHeaderReceived_hdr (hsz : MlkemSizes) (σ : BState) (ep : ℕ) (a : Auth)
+theorem recv_noHeaderReceived_hdr (σ : BState) (ep : ℕ) (a : Auth)
     (dec : encoding.polynomial.PolyDecoder)
     (msg : Message) (msg' : SPQR.Chunked.Message L2.Sym) (c : encoding.Chunk)
     (hrel : ChunkedRel σ (.noHeaderReceived ⟨ep, a⟩ dec)) (hRM : RM msg msg')
     (hpay : msg.payload = .Hdr c) (hep : msg'.epoch = ep) (h64 : ep < 2 ^ 64)
-    (r : SPQR.Chunked.RecvResult codeParams Braid.Auth)
+    (r : SPQR.Chunked.RecvResult codeParams BraidModel.Auth)
     (hr : SPQR.Chunked.recv codeParams codeAuth (.noHeaderReceived ⟨ep, a⟩ dec) msg' = .ok r) :
-    ∃ σ', Braid.receive codePrims σ (absMsg msg) =
+    ∃ σ', BraidModel.receive codePrims σ (absMsg msg) =
         some (σ', r.outputKey.map fun k => (k.1, k.2.1)) ∧
       ChunkedRel σ' r.state ∧ r.receivingEpoch = msg'.epoch - 1 := by
   obtain ⟨hmk, hrel⟩ := hrel
@@ -293,8 +293,8 @@ theorem recv_noHeaderReceived_hdr (hsz : MlkemSizes) (σ : BState) (ep : ℕ) (a
   obtain ⟨d', had, hca, hsa, hwf', res, hres, hcm, hsd, hlen⟩ :=
     decStep 3 (by decide) hdrCodec d hwf c
   simp only [SPQR.Chunked.recv, SPQR.Chunked.PartyState.epoch, lt_irrefl, ite_false] at hr
-  simp only [Braid.receive, Braid.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
-    Braid.receiveEq]
+  simp only [BraidModel.receive, BraidModel.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
+    BraidModel.receiveEq]
   rw [show codeParams.decHdr.addChunk _ (chunkOfCode c) = d' from hsa,
     show codeParams.decHdr.decodedPayload d' = _ from hsd] at hr
   rw [hca, hcm]
@@ -316,7 +316,7 @@ theorem recv_noHeaderReceived_hdr (hsz : MlkemSizes) (σ : BState) (ep : ℕ) (a
       refine ⟨.headerReceived ep' a' (v.val.take 64) (codePrims.decoderNew codePrims.ekSize),
         rfl, ⟨hmk, rfl, rfl, ?_, ?_⟩, rfl⟩
       · rw [fit_of_length ht]
-      · rw [codePrims_ekSize hsz, show 1152 = 32 * 36 from rfl,
+      · rw [codePrims_ekSize, show 1152 = 32 * 36 from rfl,
           codePrims_decoderNew 36 (by decide) ekCodec]
         exact ⟨rfl, decWF_empty 36 (by decide) ekCodec⟩
     · simp only [hm, ↓reduceIte] at hr
@@ -357,11 +357,11 @@ theorem completeCt2_rel (ep : ℕ) (a : Auth) (hdr : B 64) (es : B 2080) (c1 : B
   rw [e1] at henc
   exact ⟨hmk, rfl, rfl, rfl, henc.1, henc.2⟩
 
-/-- `CtSender.recvVector` over the code's parameters: the code's `ek` check. -/
-theorem recvVector_code (ep : ℕ) (a : Auth) (hdr : B 64) (es : B 2080) (c1 : B 960)
+/-- `CtSender.recvEk` over the code's parameters: the code's `ek` check. -/
+theorem recvEk_code (ep : ℕ) (a : Auth) (hdr : B 64) (es : B 2080) (c1 : B 960)
     (vec : B 1152) :
-    SPQR.CtSender.recvVector codeParams.inc
-      (⟨ep, a, hdr, es, c1⟩ : SPQR.CtSender.Ct1Sent codeParams.inc Auth) vec =
+    SPQR.CtSender.recvEk codeParams
+      (⟨ep, a, hdr, es, c1⟩ : SPQR.CtSender.Ct1Sent codeParams Auth) vec =
     if codePrims.ekMatches hdr.1 vec.1 then some ⟨ep, a, hdr, es, c1, vec⟩ else none := rfl
 
 /-- The `ek` arm in `ct1Sampled` (transition (10)), with the `ek` check. -/
@@ -371,10 +371,10 @@ theorem recv_ct1Sampled_ek (σ : BState) (ep : ℕ) (a : Auth) (hdr : B 64)
     (msg : Message) (msg' : SPQR.Chunked.Message L2.Sym) (c : encoding.Chunk)
     (hrel : ChunkedRel σ (.ct1Sampled ⟨ep, a, hdr, es, c1⟩ ecs dec)) (hRM : RM msg msg')
     (hpay : msg.payload = .Ek c) (hep : msg'.epoch = ep)
-    (r : SPQR.Chunked.RecvResult codeParams Braid.Auth)
+    (r : SPQR.Chunked.RecvResult codeParams BraidModel.Auth)
     (hr : SPQR.Chunked.recv codeParams codeAuth (.ct1Sampled ⟨ep, a, hdr, es, c1⟩ ecs dec) msg' =
       .ok r) :
-    ∃ σ', Braid.receive codePrims σ (absMsg msg) =
+    ∃ σ', BraidModel.receive codePrims σ (absMsg msg) =
         some (σ', r.outputKey.map fun k => (k.1, k.2.1)) ∧
       ChunkedRel σ' r.state ∧ r.receivingEpoch = msg'.epoch - 1 := by
   obtain ⟨hmk, hrel⟩ := hrel
@@ -391,8 +391,8 @@ theorem recv_ct1Sampled_ek (σ : BState) (ep : ℕ) (a : Auth) (hdr : B 64)
   obtain ⟨d', had, hca, hsa, hwf', res, hres, hcm, hsd, hlen⟩ :=
     decStep 36 (by decide) ekCodec d hwf c
   simp only [SPQR.Chunked.recv, SPQR.Chunked.PartyState.epoch, lt_irrefl, ite_false] at hr
-  simp only [Braid.receive, Braid.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
-    Braid.receiveEq]
+  simp only [BraidModel.receive, BraidModel.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
+    BraidModel.receiveEq]
   rw [show codeParams.decEk.addChunk _ (chunkOfCode c) = d' from hsa,
     show codeParams.decEk.decodedPayload d' = _ from hsd] at hr
   rw [hca, hcm]
@@ -402,7 +402,7 @@ theorem recv_ct1Sampled_ek (σ : BState) (ep : ℕ) (a : Auth) (hdr : B 64)
     exact ⟨_, rfl, ⟨hmk, rfl, rfl, rfl, rfl, rfl, henc, rfl, hwf'⟩, rfl⟩
   · have hv : v.val.length = 32 * 36 := hlen v rfl
     simp only [Option.bind_some, ekCodec, bytesForm_parse 36 v.val hv] at hr
-    erw [recvVector_code] at hr
+    erw [recvEk_code] at hr
     simp only [Option.map_some]
     by_cases hm : codePrims.ekMatches hdr.1 v.val = true
     · simp only [hm, ↓reduceIte, Except.ok.injEq] at hr ⊢
@@ -418,10 +418,10 @@ theorem recv_ct1Sampled_ekCt1Ack (σ : BState) (ep : ℕ) (a : Auth) (hdr : B 64
     (msg : Message) (msg' : SPQR.Chunked.Message L2.Sym) (c : encoding.Chunk)
     (hrel : ChunkedRel σ (.ct1Sampled ⟨ep, a, hdr, es, c1⟩ ecs dec)) (hRM : RM msg msg')
     (hpay : msg.payload = .EkCt1Ack c) (hep : msg'.epoch = ep) (h64 : ep < 2 ^ 64)
-    (r : SPQR.Chunked.RecvResult codeParams Braid.Auth)
+    (r : SPQR.Chunked.RecvResult codeParams BraidModel.Auth)
     (hr : SPQR.Chunked.recv codeParams codeAuth (.ct1Sampled ⟨ep, a, hdr, es, c1⟩ ecs dec) msg' =
       .ok r) :
-    ∃ σ', Braid.receive codePrims σ (absMsg msg) =
+    ∃ σ', BraidModel.receive codePrims σ (absMsg msg) =
         some (σ', r.outputKey.map fun k => (k.1, k.2.1)) ∧
       ChunkedRel σ' r.state ∧ r.receivingEpoch = msg'.epoch - 1 := by
   obtain ⟨hmk, hrel⟩ := hrel
@@ -439,8 +439,8 @@ theorem recv_ct1Sampled_ekCt1Ack (σ : BState) (ep : ℕ) (a : Auth) (hdr : B 64
   obtain ⟨d', had, hca, hsa, hwf', res, hres, hcm, hsd, hlen⟩ :=
     decStep 36 (by decide) ekCodec d hwf c
   simp only [SPQR.Chunked.recv, SPQR.Chunked.PartyState.epoch, lt_irrefl, ite_false] at hr
-  simp only [Braid.receive, Braid.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
-    Braid.receiveEq]
+  simp only [BraidModel.receive, BraidModel.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl, ite_false,
+    BraidModel.receiveEq]
   rw [show codeParams.decEk.addChunk _ (chunkOfCode c) = d' from hsa,
     show codeParams.decEk.decodedPayload d' = _ from hsd] at hr
   rw [hca, hcm]
@@ -450,7 +450,7 @@ theorem recv_ct1Sampled_ekCt1Ack (σ : BState) (ep : ℕ) (a : Auth) (hdr : B 64
     exact ⟨_, rfl, ⟨hmk, rfl, rfl, rfl, rfl, rfl, rfl, hwf'⟩, rfl⟩
   · have hv : v.val.length = 32 * 36 := hlen v rfl
     simp only [Option.bind_some, ekCodec, bytesForm_parse 36 v.val hv] at hr
-    erw [recvVector_code] at hr
+    erw [recvEk_code] at hr
     simp only [Option.map_some]
     by_cases hm : codePrims.ekMatches hdr.1 v.val = true
     · simp only [hm, ↓reduceIte, Except.ok.injEq] at hr ⊢
@@ -467,10 +467,10 @@ theorem recv_ct1Acknowledged_ek (σ : BState) (ep : ℕ) (a : Auth) (hdr : B 64)
     (hrel : ChunkedRel σ (.ct1Acknowledged ⟨ep, a, hdr, es, c1⟩ dec)) (hRM : RM msg msg')
     (hpay : msg.payload = .Ek c ∨ msg.payload = .EkCt1Ack c) (hep : msg'.epoch = ep)
     (h64 : ep < 2 ^ 64)
-    (r : SPQR.Chunked.RecvResult codeParams Braid.Auth)
+    (r : SPQR.Chunked.RecvResult codeParams BraidModel.Auth)
     (hr : SPQR.Chunked.recv codeParams codeAuth (.ct1Acknowledged ⟨ep, a, hdr, es, c1⟩ dec) msg' =
       .ok r) :
-    ∃ σ', Braid.receive codePrims σ (absMsg msg) =
+    ∃ σ', BraidModel.receive codePrims σ (absMsg msg) =
         some (σ', r.outputKey.map fun k => (k.1, k.2.1)) ∧
       ChunkedRel σ' r.state ∧ r.receivingEpoch = msg'.epoch - 1 := by
   obtain ⟨hmk, hrel⟩ := hrel
@@ -487,8 +487,8 @@ theorem recv_ct1Acknowledged_ek (σ : BState) (ep : ℕ) (a : Auth) (hdr : B 64)
   rcases hpay with hpay | hpay <;> rw [hpay] at hpr <;>
     cases pay' <;> simp only [PayloadRel] at hpr <;> subst hpr <;>
     simp only [SPQR.Chunked.recv, SPQR.Chunked.PartyState.epoch, lt_irrefl, ite_false] at hr <;>
-    simp only [Braid.receive, Braid.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl,
-      ite_false, Braid.receiveEq] <;>
+    simp only [BraidModel.receive, BraidModel.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl,
+      ite_false, BraidModel.receiveEq] <;>
     rw [show codeParams.decEk.addChunk _ (chunkOfCode c) = d' from hsa,
       show codeParams.decEk.decodedPayload d' = _ from hsd] at hr <;>
     rw [hca, hcm] <;>
@@ -499,7 +499,7 @@ theorem recv_ct1Acknowledged_ek (σ : BState) (ep : ℕ) (a : Auth) (hdr : B 64)
        exact ⟨_, rfl, ⟨hmk, rfl, rfl, rfl, rfl, rfl, rfl, hwf'⟩, rfl⟩)
     | (have hv : v.val.length = 32 * 36 := hlen v rfl
        simp only [Option.bind_some, ekCodec, bytesForm_parse 36 v.val hv] at hr
-       erw [recvVector_code] at hr
+       erw [recvEk_code] at hr
        simp only [Option.map_some]
        by_cases hm : codePrims.ekMatches hdr.1 v.val = true
        · simp only [hm, ↓reduceIte, Except.ok.injEq] at hr ⊢
@@ -516,10 +516,10 @@ theorem recv_ekReceivedCt1Sampled_ack (σ : BState) (ep : ℕ) (a : Auth) (hdr :
     (hrel : ChunkedRel σ (.ekReceivedCt1Sampled ⟨ep, a, hdr, es, c1, vec⟩ ecs)) (hRM : RM msg msg')
     (hpay : msg.payload = .Ct1Ack true ∨ ∃ c, msg.payload = .EkCt1Ack c) (hep : msg'.epoch = ep)
     (h64 : ep < 2 ^ 64)
-    (r : SPQR.Chunked.RecvResult codeParams Braid.Auth)
+    (r : SPQR.Chunked.RecvResult codeParams BraidModel.Auth)
     (hr : SPQR.Chunked.recv codeParams codeAuth
       (.ekReceivedCt1Sampled ⟨ep, a, hdr, es, c1, vec⟩ ecs) msg' = .ok r) :
-    ∃ σ', Braid.receive codePrims σ (absMsg msg) =
+    ∃ σ', BraidModel.receive codePrims σ (absMsg msg) =
         some (σ', r.outputKey.map fun k => (k.1, k.2.1)) ∧
       ChunkedRel σ' r.state ∧ r.receivingEpoch = msg'.epoch - 1 := by
   obtain ⟨hmk, hrel⟩ := hrel
@@ -535,8 +535,8 @@ theorem recv_ekReceivedCt1Sampled_ack (σ : BState) (ep : ℕ) (a : Auth) (hdr :
     cases pay' <;> simp only [PayloadRel] at hpr <;>
     simp only [SPQR.Chunked.recv, SPQR.Chunked.PartyState.epoch, lt_irrefl, ite_false,
       Except.ok.injEq] at hr <;> subst hr <;>
-    simp only [Braid.receive, Braid.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl,
-      ite_false, Braid.receiveEq] <;>
+    simp only [BraidModel.receive, BraidModel.State.epoch, absMsg, hpay, hme, gt_iff_lt, lt_irrefl,
+      ite_false, BraidModel.receiveEq] <;>
     exact ⟨_, rfl, completeCt2_rel ep' a' hdr es c1 vec h64 hmk, trivial⟩
 
 /-- The one-sided receive relation for a `ct2` chunk in
@@ -552,7 +552,7 @@ theorem recvRel_ekSentCt1Received_ct2 (hB : BridgeObligations) (s : States) (n :
   obtain ⟨σ, hσ, hrel⟩ := hRA
   have h64 : ep < 2 ^ 64 := by rw [← hepoch, ← hRM.1]; omega
   exact recvRel_of_braid hB s n σ _ msg msg' hreach hσ hep hRM fun r hr =>
-    recv_ekSentCt1Received_ct2 hB.mlkem_sizes σ ep a sk c1 dec msg msg' c hrel hRM hpay hepoch h64
+    recv_ekSentCt1Received_ct2 σ ep a sk c1 dec msg msg' c hrel hRM hpay hepoch h64
       r hr
 
 end SpqrBridge

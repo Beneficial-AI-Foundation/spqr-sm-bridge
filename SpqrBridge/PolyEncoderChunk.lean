@@ -3,7 +3,7 @@ Copyright (c) 2026 Beneficial AI Foundation. All rights reserved.
 Released under MIT license as described in the file LICENSE.
 Authors: Beneficial AI Foundation
 -/
-import SpqrBridge.PolyDecoderLawful
+import SpqrBridge.PolyDecoderSound
 import Spqr.Specs.Encoding.Polynomial.PolyEncoder.EncodeBytes
 import Spqr.Specs.Encoding.Polynomial.PolyEncoder.NextChunk
 import Spqr.Specs.Encoding.Gf.GF16.ONE
@@ -213,8 +213,8 @@ theorem next_chunk_inv {K : ℕ} (hKN : K ≤ 2 ^ 16)
     c.index.val = enc.idx.val ∧ c.data = codeChunk msg enc.idx.val ∧
       enc'.idx.val = enc.idx.val + 1 ∧ EncInv msg enc' := by
   have hmax := usize_max_ge
-  have hfits : enc.idx.val ≤ U16.max := by
-    simp only [U16.max, U16.numBits, UScalarTy.numBits]; omega
+  have hwire : enc.wireIndex = enc.idx.val := by
+    simp only [wireIndex]; exact Nat.mod_eq_of_lt hidx
   have hadm : ∀ pts, enc.s = .Points pts → ∀ (j : Nat), j < 16 →
       let len := (pts[j]!).value.length
       len = 0 ∨ len = 1 ∨ len = 3 ∨ len = 5 ∨ len = 30 ∨ len = 34 ∨ len = 36 := by
@@ -233,7 +233,8 @@ theorem next_chunk_inv {K : ℕ} (hKN : K ≤ 2 ^ 16)
     · rw [hs] at hs'
       cases hs'
       exact (hpolys j hj).2
-  have hpost := WP.post_of_ok (next_chunk_spec enc hfits hadm hcb) h
+  have hpost := WP.post_of_ok (next_chunk_spec enc hadm hcb) h
+  simp only [NextChunkPostCond, hwire] at hpost
   obtain ⟨hcidx, _, hidx', hmatch⟩ := hpost
   have hidx'' : enc'.idx.val = enc.idx.val + 1 := by
     rw [hidx']; exact Nat.mod_eq_of_lt (by simp only [U32.size, U32.numBits, UScalarTy.numBits]; omega)
