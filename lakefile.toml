@@ -10,7 +10,7 @@ weak.linter.style.headerAlt.license = "Released under MIT license as described i
 [[require]]
 name = "Spqr"
 git = "https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify.git"
-rev = "b1be65b2d9b110aa43ed4c6034ebaed00ce26d0d"
+rev = "8ce21df96d550ba5aba5c7217ebc3183a3e72f82"
 
 [[require]]
 name = "SecureMessaging"

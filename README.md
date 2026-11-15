@@ -157,8 +157,7 @@ trusted, and Lean does not list them:
 - **Refused calls.** The adapter maps an Aeneas panic, a divergence and a Rust `Err` to a refused call. A refused send leaves the
   game unchanged. So `send_total` is necessary: without it, a code that refuses every send also
   meets the bound.
-- **The extraction and the tools.** Charon, Aeneas and its library, VCVio and Lean. The extraction
-  was edited by hand (see [Limits](#limits)).
+- **The extraction and the tools.** Charon, Aeneas and its library, VCVio and Lean.
 
 ## Limits
 
@@ -172,10 +171,6 @@ trusted, and Lean does not list them:
   persisted are outside its scope. On AVX2, those versions wrote the encapsulation state with
   byte-swapped words. SPQR's workaround repairs such a state unless every word of `e₂` is 0 or
   -1. For an honestly sampled `e₂`, that case has probability `(10/16)^256 ≈ 2^-173.6`.
-- The SparsePostQuantumRatchet-verify branch moves to Aeneas `nightly-2026.11.03-ab34bd2` by
-  renaming one identifier in the extracted files by hand, without a new extraction. It also renames
-  the namespace `Braid` to `BraidModel`, because secure-messaging defines `Braid.State`,
-  `Braid.send` and `Braid.receive` too.
 - The source references in `SrcTranslated/FunsExternal.lean` name libcrux-ml-kem 0.0.7 and
   libcrux-hmac 0.0.6, but `Cargo.lock` pins 0.0.10 and 0.0.8. For ML-KEM, the incremental API,
   the state layout, sampling and serialization are the same in 0.0.7 and 0.0.10, so only the
@@ -261,13 +256,15 @@ to the adversary. Liveness needs progress laws for the decoder and delivery assu
 
 | Package | Repository | Branch | Commit |
 |---|---|---|---|
-| `Spqr` | SparsePostQuantumRatchet-verify | `la/aeneas-bump-ab34bd2` | `b1be65b` |
+| `Spqr` | SparsePostQuantumRatchet-verify | `main` | `8ce21df` |
 | `SecureMessaging` | secure-messaging | `main` | `19964e7` |
 
-The `Spqr` commit is `main` at `90c6a61`, plus the rename of `Braid` to `BraidModel`
-([#826](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/pull/826)), plus
-one commit that moves to Aeneas `nightly-2026.11.03-ab34bd2` and Lean `v4.35.0` ([#828](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/pull/828),
-see [Limits](#limits)). `lakefile.toml` pins both commits. Both packages use Lean `v4.35.0` and Mathlib
+The `Spqr` commit includes the rename of its namespace `Braid` to `BraidModel`
+([#826](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/pull/826)),
+because secure-messaging defines `Braid` too. It also includes the move to Aeneas
+`nightly-2026.11.03-ab34bd2` and Lean `v4.35.0`
+([#828](https://github.com/Beneficial-AI-Foundation/SparsePostQuantumRatchet-verify/pull/828)).
+`lakefile.toml` pins both commits. Both packages use Lean `v4.35.0` and Mathlib
 `56a00585`. The first build compiles both dependencies and takes a while. `lake exe cache get`
 fetches Mathlib only.
 
